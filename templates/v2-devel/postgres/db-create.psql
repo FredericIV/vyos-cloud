@@ -1,0 +1,6 @@
+CREATE DATABASE kea;
+CREATE USER kea WITH PASSWORD '{{databases.dhcp_db_password}}';
+ALTER DATABASE kea OWNER TO kea;
+CREATE DATABASE pdns;
+CREATE USER pdns WITH PASSWORD '{{databases.dns_db_password}}';
+ALTER DATABASE pdns OWNER TO pdns;

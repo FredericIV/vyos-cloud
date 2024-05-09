@@ -1,0 +1,182 @@
+#### TEST SETUP ####
+conf
+
+set service ssh port '22'
+set system name-server 8.8.8.8
+set system host-name rtr-0
+set system static-host-mapping host-name rtr-1 inet 192.168.2.3
+
+set system update-check auto-check
+set system update-check url 'https://raw.githubusercontent.com/vyos/vyos-rolling-nightly-builds/main/version.json'
+
+set interfaces ethernet eth0 offload gro
+set interfaces ethernet eth0 offload gso
+set interfaces ethernet eth0 offload hw-tc-offload
+set interfaces ethernet eth0 offload rfs
+set interfaces ethernet eth0 offload rps
+set interfaces ethernet eth0 offload sg
+set interfaces ethernet eth0 offload tso
+
+set interfaces ethernet eth0 address 192.168.1.3/24
+set interfaces ethernet eth0 vif 2 address 192.168.2.3
+set interfaces ethernet eth0 vif 10 address dhcp
+set interfaces ethernet eth0 vif 20 address 192.168.20.3/24
+set interfaces ethernet eth0 vif 50 address 192.168.50.3/24
+
+set protocols static route 0.0.0.0/0 dhcp-interface eth0.10
+
+set firewall group interface-group WAN interface eth0.10
+set firewall group interface-group TRUSTED interface eth0.20
+set firewall group interface-group SERVER interface eth0.50
+set firewall group network-group SERVER-IPv4 network '192.168.50.0/24'
+set firewall group port-group VYOS_SERVICES port 853  # DNS over TLS
+set firewall group port-group VYOS_SERVICES port 53   # DNS
+set firewall group port-group VYOS_SERVICES port 67   # DHCP
+set firewall group port-group VYOS_MANAGEMENT port 22 # SSH
+set firewall group port-group INFRA_BACKEND port 5431 # Postgres (Backend Sync)
+set firewall group port-group INFRA_BACKEND port 5432 # Postgres (Frontend)
+set firewall group port-group INFRA_BACKEND port 53   # DNS (for DDNS)
+set firewall group port-group INFRA_BACKEND port 8000 # Kea control agent (for HA)
+
+# Table to use in all rules that accepts related etc and drops invalid.
+set firewall ipv4 name CONN_FILTER default-action 'return'
+set firewall ipv4 name CONN_FILTER rule 10 action 'accept'
+set firewall ipv4 name CONN_FILTER rule 10 state established
+set firewall ipv4 name CONN_FILTER rule 10 state related
+set firewall ipv4 name CONN_FILTER rule 20 action 'drop'
+set firewall ipv4 name CONN_FILTER rule 20 state invalid
+
+set firewall ipv4 forward filter rule 10 action 'jump'
+set firewall ipv4 forward filter rule 10 jump-target CONN_FILTER
+set firewall ipv4 forward filter rule 100 action jump
+set firewall ipv4 forward filter rule 100 jump-target OUTSIDE-IN
+set firewall ipv4 forward filter rule 100 inbound-interface group WAN
+set firewall ipv4 forward filter rule 100 outbound-interface group TRUSTED
+set firewall ipv4 forward filter rule 999 action 'accept'
+set firewall ipv4 forward filter rule 999 log
+
+set firewall ipv4 input filter default-action 'drop'
+set firewall ipv4 input filter rule 10 action 'jump'
+set firewall ipv4 input filter rule 10 jump-target CONN_FILTER
+set firewall ipv4 input filter rule 20 action jump
+set firewall ipv4 input filter rule 20 jump-target VyOS_MANAGEMENT
+set firewall ipv4 input filter rule 20 destination group port-group VYOS_MANAGEMENT
+set firewall ipv4 input filter rule 20 protocol tcp
+set firewall ipv4 input filter rule 30 action 'accept'
+set firewall ipv4 input filter rule 30 icmp type-name 'echo-request'
+set firewall ipv4 input filter rule 30 protocol 'icmp'
+set firewall ipv4 input filter rule 30 state new
+set firewall ipv4 input filter rule 40 action 'accept'
+set firewall ipv4 input filter rule 40 destination group port-group VYOS_SERVICES
+set firewall ipv4 input filter rule 40 protocol 'tcp_udp'
+set firewall ipv4 input filter rule 40 inbound-interface group !WAN
+set firewall ipv4 input filter rule 50 action 'accept'
+set firewall ipv4 input filter rule 50 source address 127.0.0.0/8
+set firewall ipv4 input filter rule 60 action 'accept'
+set firewall ipv4 input filter rule 60 destination group port-group INFRA_BACKEND
+set firewall ipv4 input filter rule 60 inbound-interface name eth0.2
+set firewall ipv4 input filter rule 999 action 'accept'
+set firewall ipv4 input filter rule 999 log
+
+set firewall ipv4 name OUTSIDE-IN default-action 'drop'
+
+set firewall ipv4 name VyOS_MANAGEMENT rule 15 action 'accept'
+set firewall ipv4 name VyOS_MANAGEMENT rule 15 inbound-interface group 'TRUSTED'
+set firewall ipv4 name VyOS_MANAGEMENT rule 20 action 'drop'
+set firewall ipv4 name VyOS_MANAGEMENT rule 20 recent count 4
+set firewall ipv4 name VyOS_MANAGEMENT rule 20 recent time minute
+set firewall ipv4 name VyOS_MANAGEMENT rule 20 state new
+set firewall ipv4 name VyOS_MANAGEMENT rule 20 inbound-interface group !TRUSTED
+set firewall ipv4 name VyOS_MANAGEMENT rule 21 action 'accept'
+set firewall ipv4 name VyOS_MANAGEMENT rule 21 state new
+set firewall ipv4 name VyOS_MANAGEMENT rule 21 inbound-interface group !TRUSTED
+set firewall ipv4 name VyOS_MANAGEMENT default-action 'return'
+
+commit
+exit
+
+# Add requisite container images; This must be in enable/command mode
+add container image docker.io/jonasal/kea-dhcp4-ha:2-alpine
+add container image docker.io/jonasal/kea-dhcp-ddns:2-alpine
+add container image docker.io/jonasal/kea-ctrl-agent:2-alpine
+add container image docker.io/powerdns/pdns-auth-48:latest
+add container image docker.io/powerdns/pdns-recursor-50:latest
+add container image docker.io/bitnami/postgresql-repmgr:16
+add container image docker.io/bitnami/bitnami/pgpool:4
+
+conf
+
+set container name dhcp4 cap-add net-admin
+set container name dhcp4 cap-add net-raw
+set container name dhcp4 cap-add net-bind-service
+set container name dhcp4 allow-host-networks
+set container name dhcp4 command '-c /kea/config/kea-dhcp4.conf'
+set container name dhcp4 volume conf destination '/kea/config/'
+set container name dhcp4 volume conf mode 'ro'
+set container name dhcp4 volume conf source '/config/kea/kea-dhcp4/'
+set container name dhcp4 volume socks destination '/kea/sockets/'
+set container name dhcp4 volume socks propagation 'shared'
+set container name dhcp4 volume socks source '/config/kea/socks/'
+set container name dhcp4 image docker.io/jonasal/kea-dhcp4-ha:2-alpine
+
+set container name dhcp-ddns allow-host-networks
+set container name dhcp-ddns command '-c /kea/config/kea-dhcp-ddns.conf'
+set container name dhcp-ddns volume conf destination '/kea/config/'
+set container name dhcp-ddns volume conf mode 'ro'
+set container name dhcp-ddns volume conf source '/config/kea/kea-dhcp-ddns/'
+set container name dhcp-ddns volume socks destination '/kea/sockets/'
+set container name dhcp-ddns volume socks propagation 'shared'
+set container name dhcp-ddns volume socks source '/config/kea/socks/'
+set container name dhcp-ddns image docker.io/jonasal/kea-dhcp-ddns:2-alpine
+
+set container name dhcp-ca allow-host-networks
+set container name dhcp-ca command '-c /kea/config/kea-ctrl-agent.conf'
+set container name dhcp-ca volume conf destination '/kea/config/'
+set container name dhcp-ca volume conf mode 'ro'
+set container name dhcp-ca volume conf source '/config/kea/kea-ctrl-agent/'
+set container name dhcp-ca volume socks destination '/kea/sockets/'
+set container name dhcp-ca volume socks propagation 'shared'
+set container name dhcp-ca volume socks source '/config/kea/socks/'
+set container name dhcp-ca image docker.io/jonasal/kea-ctrl-agent:2-alpine
+
+set container name postgres allow-host-networks
+#set container name postgres cap-add net-bind-service
+set container name postgres image 'docker.io/bitnami/postgresql-repmgr:16'
+set container name postgres memory 0
+set container name postgres volume pgdata destination '/bitnami/postgresql'
+set container name postgres volume pgdata mode 'rw'
+set container name postgres volume pgdata source '/config/postgres/data'
+set container name postgres volume pgconf destination '/docker-entrypoint-initdb.d'
+set container name postgres volume pgconf mode 'rw'
+set container name postgres volume pgconf source '/config/postgres/conf'
+set container name postgres environment POSTGRESQL_POSTGRES_PASSWORD value adminpassword
+set container name postgres environment POSTGRESQL_USERNAME value customuser
+set container name postgres environment POSTGRESQL_PASSWORD value custompassword
+set container name postgres environment POSTGRESQL_DATABASE value customdatabase
+set container name postgres environment POSTGRESQL_NUM_SYNCHRONOUS_REPLICAS value 1
+set container name postgres environment REPMGR_PRIMARY_HOST value rtr-0
+set container name postgres environment REPMGR_PARTNER_NODES value 'rtr-1,rtr-0'
+set container name postgres environment REPMGR_USERNAME value repmgr
+set container name postgres environment REPMGR_PASSWORD value repmgrpassword
+
+set container name postgres environment POSTGRESQL_CLUSTER_APP_NAME value rtr-0 # change
+set container name postgres environment REPMGR_NODE_NAME value rtr-0 # change
+set container name postgres environment REPMGR_NODE_NETWORK_NAME value rtr-0 # change
+
+set container name pgpool allow-host-networks
+set container name pgpool image 'docker.io/bitnami/pgpool:4'
+set container name pgpool memory 0
+set container name pgpool environment PGPOOL_BACKEND_NODES value '0:rtr-0,1:rtr-1'
+set container name pgpool environment PGPOOL_SR_CHECK_USER value repmgr
+set container name pgpool environment PGPOOL_SR_CHECK_PASSWORD value repmgrpassword
+set container name pgpool environment PGPOOL_ENABLE_LDAP value no
+set container name pgpool environment PGPOOL_POSTGRES_USERNAME value postgres
+set container name pgpool environment PGPOOL_POSTGRES_PASSWORD value adminpassword
+set container name pgpool environment PGPOOL_ADMIN_USERNAME value admin
+set container name pgpool environment PGPOOL_ADMIN_PASSWORD value adminpassword
+set container name pgpool environment PGPOOL_ENABLE_LOAD_BALANCING value no
+set container name pgpool environment PGPOOL_POSTGRES_CUSTOM_USERS value customuser
+set container name pgpool environment PGPOOL_POSTGRES_CUSTOM_PASSWORDS value custompassword
+set container name pgpool environment PGPOOL_AUTO_FAILBACK value yes
+set container name pgpool environment PGPOOL_PORT_NUMBER value 5433
+set container name pgpool environment PGPOOL_BACKEND_APPLICATION_NAMES value 'rtr-0,rtr-1'

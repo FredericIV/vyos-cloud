@@ -1,0 +1,152 @@
+delete interfaces
+delete protocols
+delete service
+delete firewall
+delete container
+delete system
+delete high-availability
+
+set firewall group port-group INFRA_BACKEND port '5431'
+set firewall group port-group INFRA_BACKEND port '5432'
+set firewall group port-group INFRA_BACKEND port '5354'
+set firewall group port-group INFRA_BACKEND port '8000'
+set firewall group port-group VYOS_MANAGEMENT port '22'
+set firewall group port-group VYOS_SERVICES port '853'
+set firewall group port-group VYOS_SERVICES port '53'
+set firewall group port-group VYOS_SERVICES port '67'
+set firewall ipv4 input filter default-action 'drop'
+set firewall ipv4 input filter rule 10 action 'jump'
+set firewall ipv4 input filter rule 10 jump-target 'CONN_FILTER'
+set firewall ipv4 input filter rule 20 action 'accept'
+set firewall ipv4 input filter rule 20 destination group port-group 'VYOS_SERVICES'
+set firewall ipv4 input filter rule 20 protocol 'tcp_udp'
+set firewall ipv4 input filter rule 30 action 'accept'
+set firewall ipv4 input filter rule 30 source address '127.0.0.0/8'
+set firewall ipv4 input filter rule 40 action 'accept'
+set firewall ipv4 input filter rule 40 destination group port-group 'INFRA_BACKEND'
+set firewall ipv4 input filter rule 40 inbound-interface name 'eth0'
+set firewall ipv4 input filter rule 40 protocol 'tcp_udp'
+set firewall ipv4 input filter rule 40 source address '10.0.0.0/24'
+set firewall ipv4 input filter rule 50 action 'accept'
+set firewall ipv4 input filter rule 50 icmp type-name 'echo-request'
+set firewall ipv4 input filter rule 50 protocol 'icmp'
+set firewall ipv4 input filter rule 60 action 'jump'
+set firewall ipv4 input filter rule 60 destination group port-group 'VYOS_MANAGEMENT'
+set firewall ipv4 input filter rule 60 jump-target 'VyOS_MANAGEMENT'
+set firewall ipv4 input filter rule 60 protocol 'tcp'
+set firewall ipv4 input filter rule 60 state 'new'
+set firewall ipv4 input filter rule 999 action 'accept'
+set firewall ipv4 input filter rule 999 log
+set firewall ipv4 name CONN_FILTER default-action 'return'
+set firewall ipv4 name CONN_FILTER rule 10 action 'accept'
+set firewall ipv4 name CONN_FILTER rule 10 state 'established'
+set firewall ipv4 name CONN_FILTER rule 10 state 'related'
+set firewall ipv4 name CONN_FILTER rule 20 action 'drop'
+set firewall ipv4 name CONN_FILTER rule 20 state 'invalid'
+set firewall ipv4 name VyOS_MANAGEMENT default-action 'return'
+set firewall ipv4 name VyOS_MANAGEMENT rule 20 action 'drop'
+set firewall ipv4 name VyOS_MANAGEMENT rule 20 recent count '4'
+set firewall ipv4 name VyOS_MANAGEMENT rule 20 recent time 'minute'
+set firewall ipv4 name VyOS_MANAGEMENT rule 20 state 'new'
+set firewall ipv4 name VyOS_MANAGEMENT rule 21 action 'accept'
+set firewall ipv4 name VyOS_MANAGEMENT rule 21 state 'new'
+
+set interfaces ethernet eth0 address '10.0.0.{{VLAN}}/24'
+set interfaces ethernet eth0 description 'INFRA'
+set interfaces ethernet eth0 offload gro
+set interfaces ethernet eth0 offload gso
+set interfaces ethernet eth0 offload sg
+set interfaces ethernet eth1 address '10.0.{{VLAN}}.1/24'
+set interfaces ethernet eth1 description '{{VLAN}} Net'
+set interfaces ethernet eth1 offload gro
+set interfaces ethernet eth1 offload gso
+set interfaces ethernet eth1 offload sg
+set interfaces loopback lo
+
+set protocols ospf area 0 network '10.0.{{VLAN}}.0/24'
+set protocols ospf area 0 network '10.0.0.0/24'
+set protocols ospf auto-cost reference-bandwidth '10000'
+set protocols ospf interface eth0 bfd
+set protocols ospf interface eth0 passive disable
+set protocols ospf interface eth1
+set protocols ospf passive-interface 'default'
+
+set service ntp allow-client address '0.0.0.0/0'
+set service ntp allow-client address '::/0'
+set service ntp server 0.pool.ntp.org
+set service ntp server 1.pool.ntp.org
+set service ntp server 2.pool.ntp.org
+
+set service ssh port '22'
+set system config-management commit-revisions '100'
+set system conntrack modules ftp
+set system conntrack modules h323
+set system conntrack modules nfs
+set system conntrack modules pptp
+set system conntrack modules sip
+set system conntrack modules sqlnet
+set system conntrack modules tftp
+set system console device ttyS0 speed '115200'
+set system host-name 'rtr{{VLAN}}'
+set system domain-name '{{DOMAIN}}
+set system login user vyos authentication plaintext-password 'vyos'
+set system name-server '8.8.8.8'
+set system update-check auto-check
+set system update-check url 'https://raw.githubusercontent.com/vyos/vyos-rolling-nightly-builds/main/version.json'
+
+set container name kea-ctrl-agent allow-host-networks
+set container name kea-ctrl-agent command '-c /kea/config/kea-ctrl-agent.json'
+set container name kea-ctrl-agent image 'gitea.fabiv.pw/fborries/jonasal/kea-ctrl-agent:2-alpine'
+set container name kea-ctrl-agent volume config destination '/kea/config/'
+set container name kea-ctrl-agent volume config mode 'ro'
+set container name kea-ctrl-agent volume config source '/opt/vyatta/etc/config/containers/kea-ctrl-agent/config/'
+set container name kea-ctrl-agent volume sockets destination '/kea/sockets/'
+set container name kea-ctrl-agent volume sockets propagation 'shared'
+set container name kea-ctrl-agent volume sockets source '/opt/vyatta/etc/config/containers/kea-sockets/'
+
+set container name kea-dhcp-ddns allow-host-networks
+set container name kea-dhcp-ddns command '-c /kea/config/kea-dhcp-ddns.json'
+set container name kea-dhcp-ddns image 'gitea.fabiv.pw/fborries/jonasal/kea-dhcp-ddns:2-alpine'
+set container name kea-dhcp-ddns volume config destination '/kea/config/'
+set container name kea-dhcp-ddns volume config mode 'ro'
+set container name kea-dhcp-ddns volume config source '/opt/vyatta/etc/config/containers/kea-dhcp-ddns/config/'
+set container name kea-dhcp-ddns volume sockets destination '/kea/sockets/'
+set container name kea-dhcp-ddns volume sockets propagation 'shared'
+set container name kea-dhcp-ddns volume sockets source '/opt/vyatta/etc/config/containers/kea-sockets/'
+
+set container name kea-dhcp4 allow-host-networks
+set container name kea-dhcp4 cap-add 'net-admin'
+set container name kea-dhcp4 cap-add 'net-raw'
+set container name kea-dhcp4 cap-add 'net-bind-service'
+set container name kea-dhcp4 command '-c /kea/config/kea-dhcp4.json'
+set container name kea-dhcp4 image 'gitea.fabiv.pw/fborries/jonasal/kea-dhcp4-ha:2-alpine'
+set container name kea-dhcp4 volume config destination '/kea/config/'
+set container name kea-dhcp4 volume config mode 'ro'
+set container name kea-dhcp4 volume config source '/opt/vyatta/etc/config/containers/kea-dhcp4/config/'
+set container name kea-dhcp4 volume sockets destination '/kea/sockets/'
+set container name kea-dhcp4 volume sockets propagation 'shared'
+set container name kea-dhcp4 volume sockets source '/opt/vyatta/etc/config/containers/kea-sockets/'
+
+set container name pdns-auth allow-host-networks
+set container name pdns-auth image 'gitea.fabiv.pw/fborries/powerdns/pdns-auth-48:latest'
+set container name pdns-auth volume config destination '/etc/powerdns/'
+set container name pdns-auth volume config mode 'ro'
+set container name pdns-auth volume config source '/opt/vyatta/etc/config/containers/pdns-auth/'
+
+set container name pdns-recursor allow-host-networks
+set container name pdns-recursor cap-add 'net-bind-service'
+set container name pdns-recursor image 'gitea.fabiv.pw/fborries/powerdns/pdns-recursor-50:latest'
+set container name pdns-recursor volume config destination '/etc/powerdns/'
+set container name pdns-recursor volume config mode 'ro'
+set container name pdns-recursor volume config source '/opt/vyatta/etc/config/containers/pdns-recursor/'
+
+set container name postgres allow-host-networks
+set container name postgres environment POSTGRES_PASSWORD value '{{POSTGRES_PASSWORD}}'
+set container name postgres image 'gitea.fabiv.pw/fborries/postgres:16-alpine'
+set container name postgres memory '0'
+set container name postgres volume config destination '/docker-entrypoint-initdb.d'
+set container name postgres volume config mode 'ro'
+set container name postgres volume config source '/opt/vyatta/etc/config/containers/postgres/config'
+set container name postgres volume pgdata destination '/var/lib/postgresql/data'
+set container name postgres volume pgdata mode 'rw'
+set container name postgres volume pgdata source '/opt/vyatta/etc/config/containers/postgres/data'

@@ -1,0 +1,6 @@
+VLAN: 5
+DOMAIN: example.org # VLAN is auto prefixed onto domain f/ ddns.
+POSTGRES_PASSWORD: SR5GksRKGH94A1fYSFCeZtIUu8n8thgSPragHo8u9AY
+KEA_DB_PASSWORD: cSzXaAeoPQU6rb4uP0J7TcUlAa3h9kawOuiDOIhQeCw
+PDNS_DB_PASSWORD: nocy511tBV2gqUGn2d9FplZ60bfzgedhottOraSglxI
+DDNS_KEY: QKEJsoGjYd9Pqe9XML9OaFqx4nU36wRmJeXr/bQ32hE=

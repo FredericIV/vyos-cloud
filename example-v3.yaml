@@ -1,0 +1,95 @@
+features:
+  ha: hot-standby/false
+  ntp:
+    enabled: true
+    server:
+      - 0.pool.ntp.org
+      - 1.pool.ntp.org
+      - 2.pool.ntp.org
+  dhcp:
+    enabled: true
+    dhcpControlAgent: true
+    default-dns:
+      - self
+      - 8.8.8.8
+    defaultNtp:
+      - self
+      - time.windows.com
+  dns:
+    enabled: true
+    ddns:
+      defaultSuffix: h.example.org
+      defaultPrefix: ip
+    forwarding: #recursive if unspecified
+      servers:
+        - 8.8.8.8
+    records:
+      - host: fileshare
+        zone: h.example.org
+        ip: 192.168.50.7/24
+        reverse: true
+routerHostnames:
+  - rtr-0
+  - rtr-1
+systemDns:
+  - self
+  - 8.8.8.8
+firewall:
+  defaultAction: accept
+  logDefault: true
+subnets:
+  - name: test
+    netAddr: x.x.x.x
+    cidr: 24
+    ha: true
+    suffix: h.example.org
+    prefix: host
+    interface: LIST OF LENGTH ROUTER-HOSTNAMES or Interface
+    lldp: listen/advertise/false
+    dhcp: true
+    dhcp-pool: x-x
+    mdns: true
+    defaultAction: allow/deny # Defaults to return
+    logDefault: true
+    dns:
+      - 172.0.0.4
+    ntp:
+      - 172.0.0.4
+    allowTo:
+      - TRUSTED
+      - wan
+    denyTo:
+      - INFRA
+infrastructureNetwork:
+  netAddr: x.x.x.x
+  cidr: 24
+  interface:
+mdns:
+  enabled: true
+  allowedServices: #Enables whitelist
+    - "xasdf.asdf"
+  browsingDomains:
+    - "asdf.asdf"
+wan:
+  - name: wan
+    interface: interfacewan
+    ip: dhcp
+    gateway:
+syslog:
+  - host: 192.168.50.3
+    level: info
+    port: 514
+    proto: udp
+    facility: all
+additionalOperation:
+  - value: "op pre"
+    order: pre
+  - value: "op post"
+    order: post
+  - "default op"
+additionalConfiguration:
+  - value: "conf pre"
+    order: pre
+  - value: "conf post"
+    order: post
+  - "default conf"

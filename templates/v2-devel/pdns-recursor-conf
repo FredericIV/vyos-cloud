@@ -1,0 +1,18 @@
+incoming:
+  listen:
+    - 127.0.0.1
+    - {{eth1.address|hostaddress}}
+    - '::1'
+  non_local_bind: true
+recursor:
+  forward_zones:
+    - zone: {{dns.forward_domain}}
+      forwarders:
+      - 127.0.0.1:5354
+      - '[::1]:5354'
+    - zone: {{dns.reverse_domain}}
+      forwarders:
+      - 127.0.0.1:5354
+      - '[::1]:5354'
+dnssec:
+  validation: process-no-validate

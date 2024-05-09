@@ -1,0 +1,96 @@
+insert into tsigkeys (name, algorithm, secret) values ('dhcp', 'hmac-sha256', '{{DDNS_KEY}}');
+
+-- Forward Records
+insert into domains (name, type) values ('{{VLAN}}.{{DOMAIN}}', 'NATIVE');
+insert into records (domain_id, name, type, content) values
+(
+  1,
+  '{{VLAN}}.{{DOMAIN}}',
+  'SOA',
+  'rtr{{VLAN}}.{{VLAN}}.{{DOMAIN}}' || ' hostmaster.' || '{{DOMAIN}}' || ' 0 10 5 600000 5'
+);
+insert into records (domain_id, name, type, content) values
+(
+  1,
+  '{{VLAN}}.{{DOMAIN}}',
+  'NS',
+  'rtr{{VLAN}}.{{VLAN}}.{{DOMAIN}}'
+);
+insert into records (domain_id, name, type, content) values
+(
+  1,
+  'rtr{{VLAN}}.{{VLAN}}.{{DOMAIN}}',
+  'A',
+  '10.0.{{VLAN}}.1'
+);
+insert into domainmetadata (domain_id, kind, content) values
+(
+  1,
+  'TSIG-ALLOW-DNSUPDATE',
+  'dhcp'
+);
+
+-- PTR records
+insert into domains (name, type) values ('{{VLAN}}.0.10.in-addr.arpa', 'NATIVE');
+insert into records (domain_id, name, type, content) values
+(
+  2,
+  '{{VLAN}}.0.10.in-addr.arpa',
+  'SOA',
+  'rtr{{VLAN}}.{{VLAN}}.{{DOMAIN}}' || ' hostmaster.' || '{{DOMAIN}}' || ' 0 10 5 600000 5'
+);
+insert into records (domain_id, name, type, content) values
+(
+  2,
+  '{{VLAN}}.0.10.in-addr.arpa',
+  'NS',
+  'rtr{{VLAN}}.{{VLAN}}.{{DOMAIN}}'
+);
+insert into records (domain_id, name, type, content) values
+(
+  2,
+  '1.{{VLAN}}.0.10.in-addr.arpa',
+  'PTR',
+  'rtr{{VLAN}}.{{VLAN}}.{{DOMAIN}}'
+);
+insert into domainmetadata (domain_id, kind, content) values
+(
+  2,
+  'TSIG-ALLOW-DNSUPDATE',
+  'dhcp'
+);
+
+
+{% if vlan == 0 %}
+{% for i in range(1,254) %}
+insert into records (domain_id, name, type, content) values
+(
+  1,
+  '{{i}}.{{DOMAIN}}',
+  'NS',
+  'rtr{{i}}.{{i}}.{{DOMAIN}}'
+);
+insert into records (domain_id, name, type, content) values
+(
+  1,
+  'rtr{{i}}.{{i}}.{{DOMAIN}}',
+  'A',
+  '10.0.0.{{i}}'
+);
+insert into records (domain_id, name, type, content) values
+(
+  2,
+  '{{i}}.0.10.in-addr.arpa',
+  'NS',
+  'rtr{{i}}.{{i}}.{{DOMAIN}}'
+);
+insert into records (domain_id, name, type, content) values
+(
+  2,
+  '{{i}}.0.0.10.in-addr.arpa',
+  'PTR',
+  'rtr{{i}}.{{i}}.{{DOMAIN}}'
+);
+{% endfor %}
+{% endif %}
+

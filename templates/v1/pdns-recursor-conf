@@ -1,0 +1,25 @@
+incoming:
+  listen:
+    - 127.0.0.1
+    - 10.0.{{VLAN}}.1
+    - 10.0.0.{{VLAN}}
+    - '::1'
+  non_local_bind: true
+recursor:
+  forward_zones:
+    - zone: {{DOMAIN}}
+      forwarders:
+      - 10.0.0.1:5354
+    - zone: 10.in-addr.arpa
+      forwarders:
+      - 10.0.0.1:5354
+    - zone: {{VLAN}}.{{DOMAIN}}
+      forwarders:
+      - 127.0.0.1:5354
+      - '[::1]:5354'
+    - zone: {{VLAN}}.0.10.in-addr.arpa
+      forwarders:
+      - 127.0.0.1:5354
+      - '[::1]:5354'
+dnssec:
+  validation: process-no-validate

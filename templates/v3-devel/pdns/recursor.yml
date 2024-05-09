@@ -1,0 +1,21 @@
+incoming:
+  listen:
+    - 127.0.0.1
+    - 192.168.1.1
+    - 192.168.2.1
+    - 192.168.20.1
+    - 192.168.30.1
+    - 192.168.40.1
+    - 192.168.50.1
+    - 192.168.51.1
+    - 192.168.60.1
+  non_local_mind: true
+  tcp_fast_open: 3
+recursor:
+  forward-zones:
+    - zone: h.fabiv.pw
+      forwarders:
+      - 192.168.2.1:5354
+    - zone: 168.192.in-addr.arpa
+      forwarders:
+      - 192.168.2.1:5354

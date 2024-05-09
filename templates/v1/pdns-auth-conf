@@ -1,0 +1,14 @@
+dnsupdate=yes
+allow-dnsupdate-from=127.0.0.1,::1
+guardian=true
+launch=gpgsql
+local-address=127.0.0.1:5354, [::1]:5354, 10.0.0.{{VLAN}}:5354, 10.0.{{VLAN}}.1:5354
+local-address-nonexist-fail=no
+non-local-bind=yes
+tcp-fast-open=3
+gpgsql-host=127.0.0.1
+gpgsql-port=5432
+gpgsql-dbname=pdns
+gpgsql-user=pdns
+gpgsql-password={{PDNS_DB_PASSWORD}}
+gpgsql-dnssec=yes

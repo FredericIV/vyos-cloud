@@ -1,0 +1,46 @@
+{
+    "DhcpDdns": {
+        "ip-address": "127.0.0.1",
+        "port": 53001,
+        "dns-server-timeout": 500,
+        "control-socket": {
+            "socket-type": "unix",
+            "socket-name": "/kea/sockets/ddns.sock"
+        },
+        "ncr-protocol": "UDP",
+        "ncr-format": "JSON",
+        "tsig-keys": [ {
+            "name": "dhcp",
+            "algorithm": "HMAC-SHA256",
+            "secret": "{{dns.ddns_tsig_key}}"
+        } ],
+        "forward-ddns": {
+            "ddns-domains": [
+                {
+                    "name": "{{dns.forward_domain}}.",
+                    "key-name": "dhcp",
+                    "dns-servers": [
+                        {
+                            "ip-address": "127.0.0.1",
+                            "port": 5354
+                        }
+                    ]
+                }
+             ]
+        },
+        "reverse-ddns": {
+            "ddns-domains":[
+                {
+                    "name": "{{eth1.address|netaddress("reverse")}}.",
+                    "key-name": "dhcp",
+                    "dns-servers": [
+                        {
+                            "ip-address": "127.0.0.1",
+                            "port": 5354
+                        }
+                    ]
+                }
+             ]
+        }
+    }
+}

@@ -1,0 +1,79 @@
+{# Quick macro to set line indent #}
+{%- macro edit(text) -%}
+{% for line in caller().split("\n") -%}
+{% if line -%}
+{% if text is none -%}
+{{line.strip()}}
+{% else -%}
+{{text ~ " " ~ line}}
+{% endif -%}
+{% endif -%}
+{% endfor -%}
+{% endmacro -%}
+
+#cloud-config
+write_files:
+  - path: /opt/vyatta/etc/config/scripts/vyos-postconfig-bootup.script
+    owner: root:vyattacfg
+    permissions: '0775'
+    content: |
+      #!/bin/vbash
+      rm /opt/vyatta/etc/config/containers/{postgres/data,kea-sockets}/touch
+      source /opt/vyatta/etc/functions/script-template
+{%- for image in ['gitea.fabiv.pw/fborries/postgres:16-alpine','gitea.fabiv.pw/fborries/jonasal/kea-dhcp4-ha:2-alpine','gitea.fabiv.pw/fborries/jonasal/kea-dhcp-ddns:2-alpine','gitea.fabiv.pw/fborries/jonasal/kea-ctrl-agent:2-alpine','gitea.fabiv.pw/fborries/powerdns/pdns-auth-48:latest','gitea.fabiv.pw/fborries/powerdns/pdns-recursor-50:latest'] %}
+      run add container image '{{image}}'
+{%- endfor %}{% for container in ["postgres","pdns-auth","pdns-recursor","kea-dhcp4", "kea-dhcp-ddns", "kea-ctrl-agent"] %}
+      run restart container {{container}}
+{%- endfor %}
+
+  - path: /opt/vyatta/etc/config/containers/pdns-auth/pdns.conf
+    owner: root:root
+    permissions: '0664'
+    content: |
+{% call edit("     ") -%}
+{%- include api ~ '/pdns-auth-conf' %}
+{%- endcall %}
+
+  - path: /opt/vyatta/etc/config/containers/pdns-recursor/recursor.yml
+    owner: root:root
+    permissions: '0664'
+    content: |
+{% call edit("     ") -%}
+{%- include api ~ '/pdns-recursor-conf' %}
+{%- endcall %}
+
+{% for file in ["kea-dhcp4", "kea-dhcp-ddns", "kea-ctrl-agent"] %}
+  - path: /opt/vyatta/etc/config/containers/{{file}}/config/{{file}}.json
+    owner: root:root
+    permissions: '0664'
+    content: |
+{% call edit("     ") -%}
+{%- include api ~ '/kea/' ~ file ~ '.json' %}
+{%- endcall %}
+{% endfor %}
+
+{% for file in ["db-create.psql", "kea-schema.psql", "pdns-init.psql", "pdns-schema.psql"] %}
+  - path: /opt/vyatta/etc/config/containers/postgres/config/{{file}}
+    owner: root:root
+    permissions: '0664'
+    content: |
+{% call edit("     ") -%}
+{%- include api ~ '/postgres/' ~ file %}
+{%- endcall %}
+{% endfor %}
+
+  - path: /opt/vyatta/etc/config/containers/postgres/config/pg.sh
+    owner: root:root
+    permissions: '0775'
+    content: |
+{% call edit("     ") -%}
+{%- include api ~ '/postgres/pg.sh' %}
+{%- endcall %}
+
+  - path: /opt/vyatta/etc/config/containers/postgres/data/touch
+  - path: /opt/vyatta/etc/config/containers/kea-sockets/touch
+
+vyos_config_commands:
+{% call edit("  -") -%}
+{%- include api ~ '/vyos-conf' %}
+{%- endcall %}

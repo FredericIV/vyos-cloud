@@ -1,0 +1,61 @@
+insert into tsigkeys (name, algorithm, secret) values ('dhcp', 'hmac-sha256', '{{dns.ddns_tsig_key}}');
+
+-- Forward Records
+insert into domains (name, type) values ('{{dns.forward_domain}}', 'NATIVE');
+insert into records (domain_id, name, type, content) values
+(
+  1,
+  '{{dns.forward_domain}}',
+  'SOA',
+  '{{hostname}}.{{dns.forward_domain}}' || ' hostmaster.' || '{{dns.forward_domain}}' || ' 0 10 5 600000 5'
+);
+insert into records (domain_id, name, type, content) values
+(
+  1,
+  '{{dns.forward_domain}}',
+  'NS',
+  '{{hostname}}.{{dns.forward_domain}}'
+);
+insert into records (domain_id, name, type, content) values
+(
+  1,
+  '{{hostname}}.{{dns.forward_domain}}',
+  'A',
+  '{{eth1.address|hostaddress}}'
+);
+insert into domainmetadata (domain_id, kind, content) values
+(
+  1,
+  'TSIG-ALLOW-DNSUPDATE',
+  'dhcp'
+);
+
+-- PTR records
+insert into domains (name, type) values ('{{eth1.address|netaddress("reverse")}}', 'NATIVE');
+insert into records (domain_id, name, type, content) values
+(
+  2,
+  '{{eth1.address|netaddress("reverse")}}',
+  'SOA',
+  '{{hostname}}.{{dns.forward_domain}}' || ' hostmaster.' || '{{dns.forward_domain}}' || ' 0 10 5 600000 5'
+);
+insert into records (domain_id, name, type, content) values
+(
+  2,
+  '{{eth1.address|netaddress("reverse")}}',
+  'NS',
+  '{{hostname}}.{{dns.forward_domain}}'
+);
+insert into records (domain_id, name, type, content) values
+(
+  2,
+  '{{eth1.address|hostaddress("reverse")}}',
+  'PTR',
+  '{{hostname}}.{{dns.forward_domain}}'
+);
+insert into domainmetadata (domain_id, kind, content) values
+(
+  2,
+  'TSIG-ALLOW-DNSUPDATE',
+  'dhcp'
+);

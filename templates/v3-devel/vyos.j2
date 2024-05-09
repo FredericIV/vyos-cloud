@@ -1,0 +1,304 @@
+{%- set haIndex = 0 -%} {# TEMP: TODO: REMOVE -#}
+
+
+{# ##### Global Variables ##### -#}
+
+{%- set features = features | default({}) -%}
+
+{%- set routerHostname = routerHostnames[haIndex] | default("vyos") -%}
+{%- set ns  = namespace(forward=500, input=500, output=500, int=500, looptest=false) -%}
+
+{#- ###### Macros ##### -#}
+
+{#- Prefixes the given text, removing extraneous whitespace. -#}
+{%- macro edit(text) -%}
+{% for line in caller().split("\n") -%}
+{% if line.strip() -%}
+{% if text is none -%}
+{{line.strip()}}
+{% else -%}
+{{text ~ " " ~ line.strip()}}
+{% endif -%}
+{% endif -%}
+{% endfor -%}
+{% endmacro -%}
+
+{% call edit(none)%} {# Remove all extraneous whitespace. Everything before this must be ws managed. #}
+
+{% macro get_address(ip, cidr='') -%}
+{{ ip.rsplit(sep=".", maxsplit=1)[0] ~ "." ~ ((ip.rsplit(sep=".", maxsplit=1)[1] | int ) + (1 if (features.ha is undefined or not features.ha) else haIndex + 2)) ~ ( "/" ~ cidr if not cidr == '' else cidr) -}}
+{%- endmacro %}
+
+{% macro get_int_name(int, dot=false) -%}
+{% if dot -%}
+{{ (int.interface[haIndex] if (int.interface is sequence and int.interface is not string) else int.interface) }}
+{%- else -%}
+{{ (int.interface[haIndex] if (int.interface is sequence and int.interface is not string) else int.interface)| replace(".", " vif ") }}
+{%- endif -%}
+{%- endmacro %}
+
+{# Macro for setting interfaces. Accepts the interface, thing to configure, and value to grab #}
+{% macro net(int, conf, parm, type="ethernet") -%}
+{% if int[parm] is defined and int[parm] is not none -%}
+set interface {{type}} {{ get_int_name(int) }} {{conf}} {{int[parm]}}
+{% endif -%}
+{%- endmacro %}
+
+{# Loop if defined, applying the template from the caller #}
+{% macro lid(var) -%}
+{% if var is defined and var is sequence and var is not string and var is not integer -%}
+{% for item in var -%}
+{{caller(item)}}
+{% endfor -%}
+{% endif -%}
+{%- endmacro -%}
+
+{% macro ruleNum(name) %}
+  {% if name == "forward" %}
+    {{ns.forward}}
+    {% set ns.forward = ns.forward + 10 %}
+  {% elif name == "input" %}
+    {{ns.input}}
+    {% set ns.input = ns.input + 10 %}
+  {% elif name == "output" %}
+    {{ns.output}}
+    {% set ns.output = ns.output + 10 %}
+  {% elif name == "int" %}
+    {{ns.int}}
+    {% set ns.int = ns.int + 10 %}
+  {% elif name == "reset" %}
+    {% set ns.int = 500 %}
+  {% endif %}
+{% endmacro %}
+
+{% macro fwLog(int) %}
+  {% if int in ["forward", "input", "output"]%}
+    {% for proto in ["ipv4", "ipv6"] %}
+      {% call edit("set firewall" ~ proto ~ int)%}
+        {% if firewall is defined and firewall.logDefault is defined and not firewall.logDefault %}
+          rule 99999 log disable
+        {% else %}
+          rule 99999 log enable
+        {% endif %}
+        {% if firewall is defined and firewall.defaultAction is defined %}
+          rule 99999 action {{firewall.defaultAction}}
+          default-action {{"drop" if firewall.defaultAction = "reject" else firewall.defaultAction}}
+        {% else %}
+          rule 99999 action drop
+        {% endif %}
+      {% endcall %}
+    {% endfor %}
+  {% else %}
+    {% call edit("set firewall" (int.proto|default("ipv4")) "name" ~ int.name)%}
+      {% if int.defaultAction is defined%}
+        default-action {{int.defaultAction}}
+      {% else %}
+        default-action return
+      {% endif %}
+    {% endcall %}
+  {% endif %}
+{% endmacro %}
+
+{# ###### Input validation ##### -#}
+
+{% if (features.ha is undefined or not features.ha) and ((routerHostnames|length)>1) and (routerHostnames is sequence and routerHostnames is not integer and routerHostnames is not string and routerHostnames is not mapping) %}
+{{"Multiple routers required for high-availability"/0}}
+{% endif -%}
+
+
+{# ##### Begin Config ##### #}
+
+#!/bin/vbash
+source /opt/vyatta/etc/functions/script-template
+
+{% call (conf) lid(additionalOperation) %}
+  {% if (conf.order is defined and conf.order == "pre") %}
+    {{conf.value}}
+  {% endif %}
+{% endcall %}
+
+configure
+
+{% call (conf) lid(additionalConfiguration) %}
+  {% if (conf.order is defined and conf.order == "pre") %}
+    {{conf.value}}
+  {% endif %}
+{% endcall %}
+
+set service ssh port '22'
+{% call (server) lid(systemDns) %}
+  {% if (server|lower) == "self" %}
+    set system name-server 127.0.0.1
+  {% else %}
+    set system name-server {{server}}
+    {% set ns.looptest = true %}
+  {% endif %}
+{% endcall %}
+{% if not ns.looptest %}
+  set system name-server 8.8.8.8
+  set system name-server 2001:4860:4860::8888
+  {% set ns.looptest = false %}
+{% endif %}
+set system host-name {{routerHostname}}
+
+{# Existing conn filter used by most FW tables #}
+{% call edit("set firewall ipv4 name CONN_FILTER") -%}
+default-action 'return'
+rule 10 action 'accept'
+rule 10 state established
+rule 10 state related
+rule 20 action 'drop'
+rule 20 state invalid
+{%- endcall %}
+
+{% for fw in ["forward", "input", "output"] %}
+{% call fwLog(fw) %}
+{% endfor %}
+
+{% if features != {} %}
+{% call edit("set firewall ipv4 forward filter rule " ~ ruleNum("forward")) -%}
+  description "Pass to {{infrastructureNetwork.name | default("RTR_INFRA")}} chain"
+  inbound-interface interface-name {{get_int_name(infrastructureNetwork, dot=true)}}
+  jump-target {{infrastructureNetwork.name | default("RTR_INFRA")}}
+  action 'jump'
+{%- endcall %}
+{% endif %}
+
+{% if features.ntp is defined and features.ntp %}
+  set service ntp allow-client address '0.0.0.0/0'
+  set service ntp allow-client address '::/0'
+  {% call edit("set firewall ipv4 forward filter rule " ~ ruleNum("forward")) -%}
+    description "Pass to {{infrastructureNetwork.name | default("RTR_INFRA")}} chain"
+    inbound-interface interface-name {{get_int_name(infrastructureNetwork, dot=true)}}
+    jump-target {{infrastructureNetwork.name | default("RTR_INFRA")}}
+    action 'jump'
+  {%- endcall %}
+  {% call (server) lid(features.ntp.server) %}
+    set service ntp server {{server}}
+  {% endcall %}
+{% endif %}
+
+{% call (int) lid(wan) %}
+  set firewall group interface-group WAN interface {{get_int_name(int, dot=true)}}
+  {{ net(int, "address", "ip")}}
+  {{ net(int, "description", "name")}}
+  {% if (int.ip|lower) == "dhcp" %}
+    set protocols static route 0.0.0.0/0 dhcp-interface {{get_int_name(int, dot=true)}}
+  {% else %}
+    set protocols static route 0.0.0.0/0 next-hop {{int.gateway}} interface {{get_int_name(int, dot=true)}}
+  {% endif %}
+{% endcall %}
+
+{% if infrastructureNetwork is defined %}
+  {% call edit("set firewall ipv4 forward filter rule " ~ ruleNum("forward")) -%}
+    description "Pass to {{infrastructureNetwork.name | default("RTR_INFRA")}} chain"
+    inbound-interface interface-name {{get_int_name(infrastructureNetwork, dot=true)}}
+    jump-target {{infrastructureNetwork.name | default("RTR_INFRA")}}
+    action 'jump'
+  {%- endcall %}
+  set firewall ipv4 name {{infrastructureNetwork.name | default("RTR_INFRA")}} description "{{infrastructureNetwork.name | default("RTR_INFRA")}} specific chain"
+  {% call edit("set firewall ipv4 name" ~ (infrastructureNetwork.name | default("RTR_INFRA")) ~ "rule" ~ ruleNum()) -%}
+    source address !{{infrastructureNetwork.netAddr ~ "/" ~ infrastructureNetwork.cidr}}
+    description "Block martian (non-native) addresses"
+    action deny
+  {% endcall %}
+{% endif %}
+
+{% for int in subnets %}
+  {{ "Subnet must have a name!"/0 if int.name is undefined or int.name is not string }}
+  {{ net(int, "address", get_address(int.netAddr, cidr=int.cidr)) }}
+  {{ net(int, "description", "name") }}
+  {% call edit("set firewall ipv4 forward filter rule " ~ ns.forward) -%}
+    description "Pass to {{int.name}} chain"
+    inbound-interface interface-name {{get_int_name(int, dot=true)}}
+    jump-target {{int.name}}
+    action 'jump'
+  {%- endcall %}
+  {% set intNs = namespace(count=10) %}
+  {% call edit("set firewall ipv4 name" ~ int.name) -%}
+    description "{{int.name}} specific chain"
+    rule {{intNs.count}} jump-target 'CONN_FILTER'
+    rule {{intNs.count}} action 'jump'
+    {% set intNs.count = intNs.count + 10 %}
+    rule {{intNs.count}} source address !{{int.netAddr ~ "/" ~ int.cidr}}
+    rule {{intNs.count}} description "Block martian (non-native) addresses"
+    rule {{intNs.count}} action deny
+    {% call (allowNet) lid(int.allowTo) %}
+      {% call edit("rule" ~ ruleNum(int.name)) %}
+        action allow
+        outbound-interface {{allowNet}}
+      {% endcall %}
+    {% endcall %}
+    {% call (denyNet) lid(int.denyTo) %}
+      {% call rule(int.name) %}
+        action deny
+        outbound-interface {{denyNet}}
+      {% endcall %}
+    {% endcall %}
+    {% if infrastructureNetwork is defined %}
+      {% set intNs.count = intNs.count + 10 %}
+      rule {{intNs.count}} action deny
+      rule {{intNs.Count}} outbound-interface {{denyNet}}
+    {% endif %}
+    {% if int.defaultAction is defined %}
+      {% set intNs.count = intNs.count + 10 %}
+      default-action {{int.defaultAction}}
+    {% else %}
+      default-action return
+    {% endif %}
+  {% endcall %}
+  {% if int.lldp is defined %}
+    set service lldp interface {{get_int_name(int, dot=true)}}
+  {% endif %}
+  {% if features.ha is defined and features.ha %}
+    {% call edit("set high-availability vrrp group" ~ int.name)%}
+      address {{get_address(int.netAddr, cidr=int.cidr)}}
+      interface {{get_int_name(int, dot=true)}}
+      priority {{(routerHostnames|length*10)-(haIndex*10)}}
+      vrid {{ loop.index*10 }}
+    {% endcall %}
+  {% endif %}
+  {% if int.mdns is defined and int.mdns %}
+    set service mdns repeater interface {{get_int_name(int, dot=true)}}
+  {% endif %}
+  {% call ruleNum("reset") %}{%endcall%}
+{% endfor %}
+
+{% if mdns is defined %}
+  {% if mdns.enabled is defined and mdns.enabled = false %}
+    set service mdns repeater disable
+  {% endif %}
+  {% call (service) lid(mdns.allowedServices) %}
+    set service mdns repeater allow-service '{{service}}'
+  {% endcall %}
+  {% call (domain) lid(mdns.browsingDomains) %}
+    set service mdns repeater browse-domain '{{domain}}'
+  {% endcall %}
+{% endif %}
+
+{% call (entry) lid(syslog) %}
+  {% if entry.host is defined %}
+    {% call edit("set system syslog host" ~ entry.host) %}
+      facility {{entry.facility|default("all")}} level {{entry.level|default("info")}}
+      port {{entry.port|default("514")}}
+      protocol {{entry.proto|default("udp")}}
+    {% endcall %}
+  {% endif %}
+{% endcall %}
+
+{% call (conf) lid(additionalConfiguration) %}
+  {% if (conf.order is defined and conf.order == "post") or conf.order is undefined %}
+    {{conf.value if conf.value is defined else conf}}
+  {% endif %}
+{% endcall %}
+
+submit
+exit
+
+{% call (conf) lid(additionalOperation) %}
+  {% if (conf.order is defined and conf.order == "post") or conf.order is undefined %}
+    {{conf.value if conf.value is defined else conf}}
+  {% endif %}
+{% endcall %}
+
+{%endcall%}     
