@@ -1,0 +1,25 @@
+name: Gitea Actions Demo
+run-name: ${{ gitea.actor }} is testing out Gitea Actions 🚀
+on: [push]
+
+jobs:
+  Explore-Gitea-Actions:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "🎉 The job was automatically triggered by a ${{ gitea.event_name }} event."
+      - run: echo "🐧 This job is now running on a ${{ runner.os }} server hosted by Gitea!"
+      - run: echo "🔎 The name of your branch is ${{ gitea.ref }} and your repository is ${{ gitea.repository }}."
+      - name: Check out repository code
+        uses: actions/checkout@v3
+        with:
+          ssh-key: ${{ secrets.INFRAKEY }}
+          ssh-known-hosts: gitea ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOczZNenNJm/4I4ofFjpKKd+7Y+Wmqwjaw9bZl3qFs8k
+      - run: echo "💡 The ${{ gitea.repository }} repository has been cloned to the runner."
+      - run: echo "🖥️ The workflow is now ready to test your code on the runner."
+      - name: List files in the repository
+        run: |
+          ls ${{ gitea.workspace }}
+          curl -s -X POST --data-binary ${{ gitea.workspace }}/butane/walker.but -H "Content-type: text/x-yaml" http://butane:8080/api/v1/transpile?pretty=true&strict=false > ${{ gitea.workspace }}/walker.ign
+          ls ${{ gitea.workspace }}
+          wc -l ${{ gitea.workspace }}/walker.ign
+      - run: echo "🍏 This job's status is ${{ job.status }}."

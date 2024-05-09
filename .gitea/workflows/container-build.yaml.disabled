@@ -1,0 +1,28 @@
+name: Gitea Actions Demo
+run-name: ${{ gitea.actor }} is testing out Gitea Actions 🚀
+on: [push]
+
+jobs:
+  build-container:
+    runs-on: ubuntu-latest
+
+    stage: container-build
+    # run parallel builds for the desired architectures
+    parallel:
+      matrix:
+        - ARCH: amd64
+        - ARCH: arm64
+    tags:
+      # run each build on a suitable, preconfigured runner (must match the target architecture)
+      - runner-${ARCH}
+    image:
+      name: gcr.io/kaniko-project/executor:debug
+      entrypoint: [""]
+    script:
+      # build the container image for the current arch using kaniko
+      - >-
+        /kaniko/executor
+        --context "${CI_PROJECT_DIR}"
+        --dockerfile "${CI_PROJECT_DIR}/Dockerfile"
+        # push the image to the GitLab container registry, add the current arch as tag.
+        --destination "${CI_REGISTRY_IMAGE}:${ARCH}"
