@@ -5,11 +5,7 @@ import ipaddress
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 import os
 import secrets
-from yaml import load
-try:
-    from yaml import CLoader as Loader, CDumper as Dumper
-except ImportError:
-    from yaml import Loader, Dumper
+from yaml import safe_load
 
 def filter_hostaddress(value, purpose=None):
     address = ipaddress.ip_interface(value)
@@ -70,7 +66,7 @@ def client(args):
     env.filters['hostaddress'] = filter_hostaddress
     env.filters['netaddress'] = filter_netaddress
     with open(args.input) as file:
-        env.globals=load(file, Loader=Loader)
+        env.globals=safe_load(file)
 
     env.globals = update_secret(args.api, env.globals)
     env.globals['api'] = args.api
@@ -142,8 +138,8 @@ def server(args):
         )
     @app.route('/v2-devel/<string:CONF>/<string:FILE>')
     def v2Path(CONF, FILE):
-        with open(CONF+'.yaml') as file:
-            env = load(file, Loader=Loader)
+        with open(CONF if CONF[-5:] == '.yaml' else CONF+'.yaml') as file:
+            env = safe_load(file)
         env = update_secret('v2-devel', env)
         env['api'] = 'v2-devel'
         return app.response_class(
