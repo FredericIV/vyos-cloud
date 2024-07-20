@@ -12,3 +12,10 @@ gpgsql-dbname=pdns
 gpgsql-user=pdns
 gpgsql-password={{databases.dns_db_password}}
 gpgsql-dnssec=yes
+{% if dns.api_key is defined %}
+webserver=yes
+webserver-allow-from=0.0.0.0/0
+webserver-address=0.0.0.0
+api=yes
+api_password={{dns.api_key}}
+{% endif %}

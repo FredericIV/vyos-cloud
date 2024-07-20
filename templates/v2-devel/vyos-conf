@@ -37,9 +37,9 @@ set firewall ipv4 input filter rule 30 action 'accept'
 set firewall ipv4 input filter rule 30 source address '127.0.0.0/8'
 set firewall ipv4 input filter rule 40 action 'accept'
 set firewall ipv4 input filter rule 40 destination group port-group 'INFRA_BACKEND'
-set firewall ipv4 input filter rule 40 inbound-interface name 'eth0'
+set firewall ipv4 input filter rule 40 inbound-interface name 'eth{{infra_net_id}}'
 set firewall ipv4 input filter rule 40 protocol 'tcp_udp'
-set firewall ipv4 input filter rule 40 source address '10.0.0.0/24'
+set firewall ipv4 input filter rule 40 source address '{{interfaces[infra_net_id]}}'
 set firewall ipv4 input filter rule 50 action 'accept'
 set firewall ipv4 input filter rule 50 icmp type-name 'echo-request'
 set firewall ipv4 input filter rule 50 protocol 'icmp'
@@ -64,36 +64,23 @@ set firewall ipv4 name VyOS_MANAGEMENT rule 20 state 'new'
 set firewall ipv4 name VyOS_MANAGEMENT rule 21 action 'accept'
 set firewall ipv4 name VyOS_MANAGEMENT rule 21 state 'new'
 
-set interfaces ethernet eth0 address '{{eth0.address}}'
-{%if eth0.description is defined%}set interfaces ethernet eth0 description '{{eth0.description}}'{%endif%}
-set interfaces ethernet eth0 offload gro
-set interfaces ethernet eth0 offload gso
-set interfaces ethernet eth0 offload sg
-
-set interfaces ethernet eth1 address '{{eth1.address}}'
-{%if eth1.description is defined%}set interfaces ethernet eth1 description '{{eth1.description}}'{%endif%}
-set interfaces ethernet eth1 offload gro
-set interfaces ethernet eth1 offload gso
-set interfaces ethernet eth1 offload sg
+{% for interface in interfaces %}
+{%if interface.address is defined%}set interfaces ethernet eth{{loop.index0}} address '{{interface.address}}'{%endif%}
+{%if interface.description is defined%}set interfaces ethernet eth{{loop.index0}} description '{{interface.description}}'{%endif%}
+set interfaces ethernet eth{{loop.index0}} offload gro
+set interfaces ethernet eth{{loop.index0}} offload gso
+set interfaces ethernet eth{{loop.index0}} offload sg
+{% if interface.ospf is defined -%}
+{% if interface.ospf.hello %}set protocols ospf interface eth{{loop.index0}} passive disable{% endif %}
+set protocols ospf interface eth{{loop.index0}} bfd
+set protocols ospf interface eth{{loop.index0}} area {{interface.ospf.area}}
+{% if (interface.ospf.auth_id is defined and defAndNotEmpty(interface.ospf.auth_id)) -%}
+set protocols ospf interface eth{{loop.index0}} authentication md5 key-id {{interface.ospf.auth_id}} md5-key '{{interface.ospf.auth_key}}'
+{%endif%}
+{%endif%}
+{%endfor%}
 set interfaces loopback lo
-
-{% if ((eth0.ospf_auth_id is defined and defAndNotEmpty(eth0.ospf_auth_key)) or (eth1.ospf_auth_id is defined and defAndNotEmpty(eth1.ospf_auth_key))) -%}
-set protocols ospf area {{ospf_area}} authentication 'md5'
-{%- endif %}
-{%call (network) lid(ospf_nets) -%}
-set protocols ospf area {{ospf_area | default("0")}} network '{{network}}'
-{%- endcall -%}
-{% if (eth0.ospf_auth_id is defined and defAndNotEmpty(eth0.ospf_auth_key)) -%}
-set protocols ospf interface eth0 authentication md5 key-id {{eth0.ospf_auth_id}} md5-key '{{eth0.ospf_auth_key}}'
-{%- endif %}
-{% if (eth1.ospf_auth_id is defined and defAndNotEmpty(eth1.ospf_auth_key)) -%}
-set protocols ospf interface eth1 authentication md5 key-id {{eth1.ospf_auth_id}} md5-key '{{eth1.ospf_auth_key}}'
-{%- endif %}
 set protocols ospf auto-cost reference-bandwidth '10000'
-set protocols ospf interface eth0 bfd
-set protocols ospf interface eth0 {% if eth0.ospf_active %}passive disable{% endif %}
-set protocols ospf interface eth1
-set protocols ospf interface eth1 {% if eth1.ospf_active %}passive disable{% endif %}
 set protocols ospf passive-interface 'default'
 
 set service ntp allow-client address '0.0.0.0/0'
@@ -224,6 +211,6 @@ set container name postgres volume pgdata destination '/var/lib/postgresql/data'
 set container name postgres volume pgdata mode 'rw'
 set container name postgres volume pgdata source '/opt/vyatta/etc/config/containers/postgres/data'
 
-{% call (rule) lid(additional_configuration) %}
+{% call (conf) lid(additional_configuration) %}
 {{conf}}
 {% endcall -%}

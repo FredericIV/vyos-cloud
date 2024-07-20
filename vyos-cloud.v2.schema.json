@@ -1,0 +1,476 @@
+{
+    "$defs": {
+        "ipv4-w-cidr": {
+            "description": "IPv4 address w/ CIDR",
+            "title": "ip4-w-cidr",
+            "type": "string"
+        },
+        "ipv4-wo-cidr": {
+            "description": "IPv4 address w/o CIDR",
+            "format": "ipv4",
+            "title": "ip4-wo-cidr",
+            "type": "string"
+        }
+    },
+    "$id": "/vyos-cloud.v2.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "description": "Configuration for vyos-cloud cloud-init generator",
+    "properties": {
+        "additional_configuration": {
+            "description": "Additional configuration to be added to the end of the generated configuration.",
+            "items": {
+                "type": "string"
+            },
+            "type": "array"
+        },
+        "databases": {
+            "additionalProperties": false,
+            "description": "Passwords. Undefined passwords auto-generate",
+            "properties": {
+                "admin_db_password": {
+                    "type": "string"
+                },
+                "dhcp_db_password": {
+                    "type": "string"
+                },
+                "dns_db_password": {
+                    "type": "string"
+                }
+            },
+            "title": "Database settings",
+            "type": "object"
+        },
+        "dhcp": {
+            "additionalProperties": false,
+            "properties": {
+                "pools": {
+                    "items": {
+                        "example": [
+                            "10.0.5.100-10.0.5.200",
+                            "10.0.5.248/30"
+                        ],
+                        "type": "string"
+                    },
+                    "minItems": 1,
+                    "type": "array"
+                },
+                "reservations": {
+                    "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                            "ip": {
+                                "type": "string"
+                            },
+                            "mac": {
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    },
+                    "type": "array"
+                }
+            },
+            "required": [
+                "pools"
+            ],
+            "type": "object"
+        },
+        "disable_update_check": {
+            "default": false,
+            "type": "boolean"
+        },
+        "dns": {
+            "additionalProperties": false,
+            "properties": {
+                "additional_forward_records": {
+                    "description": "Add custom records under the forward domain.",
+                    "items": {
+                        "properties": {
+                            "domain": {
+                                "type": "string"
+                            },
+                            "type": {
+                                "enum": [
+                                    "A",
+                                    "AAAA",
+                                    "CNAME",
+                                    "MX",
+                                    "NS",
+                                    "SRV",
+                                    "TXT"
+                                ],
+                                "type": "string"
+                            },
+                            "value": {
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    },
+                    "type": "array"
+                },
+                "additional_reverse_records": {
+                    "description": "Add custom records under the reverse domain. This should probably be a PTR record.",
+                    "items": {
+                        "properties": {
+                            "domain": {
+                                "type": "string"
+                            },
+                            "type": {
+                                "default": "PTR",
+                                "enum": [
+                                    "PTR",
+                                    "A",
+                                    "AAAA",
+                                    "CNAME",
+                                    "MX",
+                                    "NS",
+                                    "SRV",
+                                    "TXT"
+                                ],
+                                "type": "string"
+                            },
+                            "value": {
+                                "type": "string"
+                            }
+                        },
+                        "type": "object"
+                    },
+                    "type": "array"
+                },
+                "api_key": {
+                    "description": "API key for DNS updates. Existence enables api.",
+                    "type": "string"
+                },
+                "forward_domain": {
+                    "type": "string"
+                },
+                "tsig_key": {
+                    "description": "TSIG key for DNS updates",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "forward_domain"
+            ],
+            "type": "object"
+        },
+        "interfaces": {
+            "description": "Interfaces 0-N. It's a router, so at least one should be configured.",
+            "items": {
+                "additionalProperties": false,
+                "description": "Interface configuration",
+                "properties": {
+                    "addresses": {
+                        "items": {
+                            "$ref": "#/$defs/ipv4-w-cidr"
+                        },
+                        "type": "array"
+                    },
+                    "description": {
+                        "description": "Interface description",
+                        "type": "string"
+                    },
+                    "dhcp": {
+                        "description": "Enable DHCP client on this interface",
+                        "type": "boolean"
+                    },
+                    "firewall": {
+                        "description": "Specify default inbound firewall configuration.",
+                        "enum": [
+                            "allow",
+                            "deny",
+                            "nat"
+                        ],
+                        "type": "string"
+                    },
+                    "id": {
+                        "description": "Interface id (the N of ethN or vif N)",
+                        "maximum": 4095,
+                        "minimum": 0,
+                        "type": "number"
+                    },
+                    "isInfra": {
+                        "default": false,
+                        "description": "Is this the infra interface?",
+                        "type": "boolean"
+                    },
+                    "ospf": {
+                        "additionalProperties": false,
+                        "dependentRequired": {
+                            "auth_id": [
+                                "auth_key"
+                            ],
+                            "auth_key": [
+                                "auth_id"
+                            ]
+                        },
+                        "description": "OSPF configuration",
+                        "properties": {
+                            "area": {
+                                "description": "OSPF area. Also enables OSPF.",
+                                "maximum": 2147483647,
+                                "minimum": 0,
+                                "type": "number"
+                            },
+                            "auth_id": {
+                                "maximum": 255,
+                                "minimum": 0,
+                                "type": "number"
+                            },
+                            "auth_key": {
+                                "type": "string"
+                            },
+                            "hello": {
+                                "default": "false",
+                                "description": "Send OSPF hellos on interface",
+                                "type": "boolean"
+                            }
+                        },
+                        "required": [
+                            "area"
+                        ],
+                        "type": "object"
+                    },
+                    "subinterfaces": {
+                        "description": "Subinterfaces. For an ethN device, these would be vlans (vif)",
+                        "items": {
+                            "$ref": "#/properties/interfaces/items"
+                        },
+                        "type": "array"
+                    }
+                },
+                "required": [
+                    "firewall",
+                    "id"
+                ],
+                "title": "interface",
+                "type": "object"
+            },
+            "minItems": 1,
+            "type": "array"
+        },
+        "ospf": {
+            "additionalProperties": false,
+            "properties": {
+                "additional_networks": {
+                    "description": "Networks associated with an interface will automatically be added. You probably don't need this option.",
+                    "items": {
+                        "$ref": "#/$defs/ipv4-w-cidr"
+                    },
+                    "type": "array"
+                },
+                "area": {
+                    "maximum": 2147483647,
+                    "minimum": 0,
+                    "type": "number"
+                },
+                "auth": {
+                    "default": "false",
+                    "type": "boolean"
+                }
+            },
+            "type": "object"
+        },
+        "router_id": {
+            "description": "Used for vrrp, ospf, and hostname. MUST BE UNIQUE.",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "number"
+        },
+        "salt": {
+            "additionalProperties": false,
+            "description": "Salt configuration",
+            "properties": {
+                "hash": {
+                    "description": "Hash type. Defaults to sha256.",
+                    "type": "string"
+                },
+                "interval": {
+                    "description": "Interval in minutes.",
+                    "type": "integer",
+                    "default": 60
+                },
+                "master": {
+                    "type": "string"
+                },
+                "master_key": {
+                    "type": "string"
+                },
+                "id": {
+                    "description": "Defaults to hostname",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "master"
+            ],
+            "type": "object"
+        },
+        "syslog": {
+            "items": {
+                "additionalProperties": false,
+                "properties": {
+                    "facility": {
+                        "default": "all",
+                        "enum": [
+                            "all",
+                            "auth",
+                            "authpriv",
+                            "cron",
+                            "daemon",
+                            "ftp",
+                            "kern",
+                            "lpr",
+                            "mail",
+                            "mark",
+                            "news",
+                            "security",
+                            "syslog",
+                            "user",
+                            "uucp",
+                            "local0",
+                            "local1",
+                            "local2",
+                            "local3",
+                            "local4",
+                            "local5",
+                            "local6",
+                            "local7"
+                        ],
+                        "type": "string"
+                    },
+                    "host": {
+                        "type": "string"
+                    },
+                    "level": {
+                        "default": "info",
+                        "enum": [
+                            "emerg",
+                            "alert",
+                            "crit",
+                            "err",
+                            "warning",
+                            "notice",
+                            "info",
+                            "debug",
+                            "all"
+                        ],
+                        "type": "string"
+                    },
+                    "port": {
+                        "maximum": 65535,
+                        "minimum": 1,
+                        "type": "integer"
+                    },
+                    "proto": {
+                        "enum": [
+                            "tcp",
+                            "udp"
+                        ],
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "facility",
+                    "host",
+                    "level",
+                    "port",
+                    "proto"
+                ],
+                "title": "Syslog",
+                "type": "object"
+            },
+            "type": "array"
+        },
+        "system_name_servers": {
+            "default": [
+                [
+                    "127.0.0.0",
+                    "8.8.8.8"
+                ]
+            ],
+            "description": "Name servers. Defaults to google.",
+            "items": {
+                "$ref": "#/$defs/ipv4-wo-cidr"
+            },
+            "type": "array"
+        },
+        "system_ntp_servers": {
+            "description": "System ntp servers. Defaults to ntp.org",
+            "items": {
+                "type": "string"
+            },
+            "type": "array"
+        },
+        "system_search_domains": {
+            "description": "System domains to search. dns.forward_domain is included by default.",
+            "items": {
+                "format": "hostname",
+                "type": "string"
+            },
+            "type": "array"
+        },
+        "users": {
+            "description": "Users to create",
+            "items": {
+                "additionalProperties": false,
+                "properties": {
+                    "password": {
+                        "description": "The hashed password.",
+                        "type": "string"
+                    },
+                    "ssh_keys": {
+                        "items": {
+                            "additionalProperties": false,
+                            "properties": {
+                                "key": {
+                                    "description": "The key itself WITHOUT the name.",
+                                    "type": "string"
+                                },
+                                "name": {
+                                    "description": "Name of the key. Usually found in the comment field (end) of the key.",
+                                    "type": "string"
+                                },
+                                "type": {
+                                    "enum": [
+                                        "ssh-dss",
+                                        "ssh-rsa",
+                                        "ecdsa-sha2-nistp256",
+                                        "ecdsa-sha2-nistp384",
+                                        "ecdsa-sha2-nistp521",
+                                        "ssh-ed25519",
+                                        "sk-ecdsa-sha2-nistp256@openssh.com",
+                                        "sk-ssh-ed25519@openssh.com"
+                                    ],
+                                    "type": "string"
+                                }
+                            },
+                            "required": [
+                                "name",
+                                "key",
+                                "type"
+                            ],
+                            "type": "object"
+                        },
+                        "type": "array"
+                    },
+                    "username": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "username"
+                ],
+                "type": "object"
+            },
+            "type": "array"
+        }
+    },
+    "required": [
+        "router_id"
+    ],
+    "title": "vyos-cloud",
+    "type": "object"
+}
