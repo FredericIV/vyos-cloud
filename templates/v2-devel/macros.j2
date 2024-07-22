@@ -1,0 +1,28 @@
+{% macro lid(var) -%}
+{% if var is defined and var is sequence and var is not string and var is not integer -%}
+{% for item in var -%}
+{{caller(item)}}
+{% endfor -%}
+{% endif -%}
+{%- endmacro -%}
+
+{% macro defAndNotEmpty(var) -%}
+{% if var is defined and var and var|length %}
+{{true}}
+{% endif -%}
+{%- endmacro -%}
+
+{%- macro edit(text) -%}
+{% for line in caller().split("\n") -%}
+{% if line -%}
+{% if text is none -%}
+{{line.strip()}}
+{% else -%}
+{{text ~ " " ~ line}}
+{% endif -%}
+{% endif -%}
+{% endfor -%}
+{% endmacro -%}
+
+{# For use with lid. Otherwise, use {{ ", " if not loop.last else ""}} or similar. #}
+{%- macro stripTrailing(suffix=", ") %}{{caller().removesuffix(suffix)}}{% endmacro %}
