@@ -1,16 +1,4 @@
-{# Quick macro to set line indent #}
-{%- macro edit(text) -%}
-{% for line in caller().split("\n") -%}
-{% if line -%}
-{% if text is none -%}
-{{line.strip()}}
-{% else -%}
-{{text ~ " " ~ line}}
-{% endif -%}
-{% endif -%}
-{% endfor -%}
-{% endmacro -%}
-
+{% import api ~ '/macros.j2' as macros -%}
 #cloud-config
 write_files:
   - path: /opt/vyatta/etc/config/scripts/vyos-postconfig-bootup.script
@@ -30,7 +18,7 @@ write_files:
     owner: root:root
     permissions: '0664'
     content: |
-{% call edit("     ") -%}
+{% call macros.edit("     ") -%}
 {%- include api ~ '/pdns-auth-conf' %}
 {%- endcall %}
 
@@ -38,7 +26,7 @@ write_files:
     owner: root:root
     permissions: '0664'
     content: |
-{% call edit("     ") -%}
+{% call macros.edit("     ") -%}
 {%- include api ~ '/pdns-recursor-conf' %}
 {%- endcall %}
 
@@ -47,7 +35,7 @@ write_files:
     owner: root:root
     permissions: '0664'
     content: |
-{% call edit("     ") -%}
+{% call macros.edit("     ") -%}
 {%- include api ~ '/kea/' ~ file ~ '.json' %}
 {%- endcall %}
 {% endfor %}
@@ -57,7 +45,7 @@ write_files:
     owner: root:root
     permissions: '0664'
     content: |
-{% call edit("     ") -%}
+{% call macros.edit("     ") -%}
 {%- include api ~ '/postgres/' ~ file %}
 {%- endcall %}
 {% endfor %}
@@ -66,7 +54,7 @@ write_files:
     owner: root:root
     permissions: '0775'
     content: |
-{% call edit("     ") -%}
+{% call macros.edit("     ") -%}
 {%- include api ~ '/postgres/pg.sh' %}
 {%- endcall %}
 
@@ -74,6 +62,6 @@ write_files:
   - path: /opt/vyatta/etc/config/containers/kea-sockets/touch
 
 vyos_config_commands:
-{% call edit("  -") -%}
+{% call macros.edit("  -") -%}
 {%- include api ~ '/vyos-conf' %}
 {%- endcall %}

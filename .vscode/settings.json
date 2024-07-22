@@ -1,0 +1,14 @@
+{
+    "files.associations": {
+        "vendor-data": "jinja-yaml",
+        "vyos": "jinja",
+        "user-data": "jinja-yaml",
+        "pdns-recursor-conf": "jinja-yaml",
+        "pdns-auth-conf": "jinja",
+        "meta-data": "jinja-yaml",
+        "pdns-init.psql": "jinja",
+        "db-create.psql": "jinja",
+        "pg.sh": "jinja-shell",
+        "kea-*": "jinja-json",
+    }
+}

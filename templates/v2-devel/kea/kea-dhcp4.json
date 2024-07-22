@@ -1,7 +1,10 @@
+{% import api ~ '/macros.j2' as macros -%}
 {
     "Dhcp4": {
         "interfaces-config": {
-            "interfaces": [ "eth1" ],
+            "interfaces": [
+                {% for i in flat_int if i.dhcp_server is defined -%}"{{i._intID}}"{{ ", " if not loop.last else ""}}{% endfor %}
+            ],
             "service-sockets-max-retries": 5,
             "dhcp-socket-type": "raw",
             "service-sockets-require-all": false
@@ -60,30 +63,31 @@
         "option-data": [
             {
                 "name": "ntp-servers",
-                "data": "{{eth1.address|hostaddress}}"
-            },
-            {
-                "name": "domain-name-servers",
-                "data": "{{eth1.address|hostaddress}}"
-            },
-            {
-                "name": "domain-search",
-                "data": "{{dns.forward_domain}}"
+                "data": "{% if macros.defAndNotEmpty(ntp_servers)%}{% for i in ntp_servers %}{{i}}{{ ", " if not loop.last else ""}}{% endfor %}{% else %}0.pool.ntp.org, 1.pool.ntp.org, 2.pool.ntp.org{% endif %}"
             }
         ],
         "subnet4": [
-            {
-                "subnet": "{{eth1.address|netaddress("cidr")}}",
+            {% for i in flat_int if i.dhcp_server is defined and i.address is defined -%}{ 
+                "subnet": "{{i.address|netaddress("cidr")}}",
+                "interface": "{{i._intID}}",
                 "id": 1,
-                "pools": {{dhcp.pools|default([])|tojson}},
+                "pools": [{% for i in i.dhcp_server.pools %}{ "pool": "{{i}}"}{{ ", " if not loop.last else ""}}{% endfor %}],
                 "option-data": [
                     {
                         "name": "routers",
-                        "data": "{{eth1.address|hostaddress}}"
-                    }
+                        "data": "{{i.address|hostaddress}}"
+                    },
+                    {
+                        "name": "domain-name-servers",
+                        "data": "{{i.address|hostaddress}}"
+                    }{% if i.forward_domain is defined %},
+                    {
+                        "name": "domain-search",
+                        "data": "{{i.forward_domain}}"
+                    }{% endif %}
                 ],
-                "reservations": {{dhcp.reservations|default([])|tojson|replace("_", "-")}}
-            }
+                "reservations": {{i.dhcp_server.reservations|default([])|tojson|replace("_", "-")}}
+            }{{ ", " if not loop.last else ""}}{% endfor %}
         ],
         "loggers": [
             {

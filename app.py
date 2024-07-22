@@ -5,14 +5,17 @@ import ipaddress
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 import os
 import secrets
-from yaml import safe_load
+import yaml
+import json
+import jsonschema
+import copy
 
 
 def filter_hostaddress(value, purpose=None):
     address = ipaddress.ip_interface(value)
     match purpose:
         case "reverse":
-            return address.reverse_pointer
+            return address.ip.reverse_pointer
         case "mask":
             return address.hostmask
         case "strip" | _:
@@ -45,6 +48,7 @@ def gen_secret(purpose="password"):
 
 
 def update_secret(api: str, store: dict):
+    local_store = copy.deepcopy(store)
     match api:
         case "v1":
             for password in [
@@ -52,24 +56,108 @@ def update_secret(api: str, store: dict):
                 "KEA_DB_PASSWORD",
                 "PDNS_DB_PASSWORD",
             ]:
-                if store.get(password) is None:
-                    store[password] = gen_secret()
-            if store.get("DDNS_KEY") is None:
-                store["DDNS_KEY"] = gen_secret("tsig")
+                if local_store.get(password) is None:
+                    local_store[password] = gen_secret()
+            if local_store.get("DDNS_KEY") is None:
+                local_store["DDNS_KEY"] = gen_secret("tsig")
 
         case "v2-devel" | "v2":
-            if store.get("databases") is None:
-                store["databases"] = dict()
+            if local_store.get("databases") is None:
+                local_store["databases"] = dict()
             for password in [
                 "dhcp_db_password",
                 "dns_db_password",
                 "admin_db_password",
             ]:
-                if store["databases"].get(password) is None:
-                    store["databases"][password] = gen_secret()
-            if store["dns"].get("ddns_tsig_key") is None:
-                store["dns"]["ddns_tsig_key"] = gen_secret("tsig")
-    return store
+                if local_store["databases"].get(password) is None:
+                    local_store["databases"][password] = gen_secret()
+            if local_store["dns"].get("tsig_key") is None:
+                local_store["dns"]["tsig_key"] = gen_secret("tsig")
+    return local_store
+
+
+def interface_flatten(conf: dict) -> dict:
+    retval = copy.deepcopy(conf)
+    retval["flat_int"] = []
+    for interface in conf["interfaces"]:
+        int_dict = copy.deepcopy(interface)
+        int_dict["_intID"] = "eth" + str(int_dict["id"])
+        retval["flat_int"].append(int_dict)
+        if interface.get("subinterfaces") is not None:
+            for subinterface in interface["subinterfaces"]:
+                subint_dict = copy.deepcopy(subinterface)
+                subint_dict["_intID"] = (
+                    "eth" + str(interface["id"]) + "." + str(subinterface["id"])
+                )
+                retval["flat_int"].append(copy.deepcopy(subint_dict))
+    return retval
+
+
+def load_conf(name: str) -> dict:
+    if name[-5:] == ".json":
+        with open(name) as file:
+            env = json.load(file)
+    else:
+        with open(name if name[-5:] == ".yaml" else name + ".yaml") as file:
+            env = yaml.safe_load(file)
+    return env
+
+
+# Validate config, returning str only f/ errors.
+def validate_conf(conf: dict, api: str) -> str | None:
+    if api in ["v3-devel"]:
+        raise NotImplementedError("v3-devel is not implemented")
+    elif api not in ["v1", "v2-devel", "v3-devel"]:
+        raise ValueError("Invalid api")
+    with open("vyos-cloud." + api + ".schema.json") as file:
+        contents = json.load(file)
+        # Use $schema as validator, otherwise 2020-12. Validate config, return the errors.
+        errors = jsonschema.validators.validator_for(contents)(
+            schema=contents
+        ).iter_errors(instance=conf)
+        del contents
+    errortext = ""
+    for error in errors:
+        path = ""
+        for i in error.schema_path:
+            if i not in ["properties", "items", "type"]:
+                path += i + " > "
+        errortext += error.message + "\tPath: " + path + "\n"
+    return errortext if errortext != "" else None
+
+
+def get_conf(name: str, api: str) -> tuple[str, str]:
+    # Load
+    try:
+        env = load_conf(name)
+    except FileNotFoundError as e:
+        return (None, "Config not found!")
+    except Exception as e:
+        return (None, "Error getting config!\n\n" + str(e))
+    # Validate
+    try:
+        errors = validate_conf(env, api)
+    except NotImplementedError:
+        errors = None
+    except Exception as e:
+        errors = "Error validating config!\n\n" + str(e)
+    if errors != None:
+        return (None, errors)
+    # Hydrate
+    match api:
+        case "v1":
+            env = update_secret(api, env)
+            env["api"] = api
+            assert validate_conf(env, api) == None
+        case "v2-devel" | "v2":
+            env = update_secret(api, env)
+            env["api"] = api
+            env.setdefault("hostname", "rtr" + str(env["router_id"]))
+            assert validate_conf(env, api) == None
+            env = interface_flatten(env)
+        case "*" | _:
+            return (None, "Invalid api")
+    return (env, None)
 
 
 def client(args):
@@ -79,18 +167,16 @@ def client(args):
     )
     env.filters["hostaddress"] = filter_hostaddress
     env.filters["netaddress"] = filter_netaddress
-    with open(args.input) as file:
-        env.globals = safe_load(file)
-
-    env.globals = update_secret(args.api, env.globals)
-    env.globals["api"] = args.api
-
+    env.globals, error = get_conf(args.input, args.api)
+    if error != None:
+        print(error)
+        exit(1)
     print(env.get_template(os.path.join(args.api, args.filename)).render())
-    os._exit(0)
+    exit(0)
 
 
 def server(args):
-    from flask import Flask, request, render_template_string, render_template
+    from flask import Flask, render_template_string, render_template
     from waitress import serve
     import logging
 
@@ -159,12 +245,22 @@ def server(args):
 
     @app.route("/v2-devel/<string:CONF>/<string:FILE>")
     def v2Path(CONF, FILE):
-        with open(CONF if CONF[-5:] == ".yaml" else CONF + ".yaml") as file:
-            env = safe_load(file)
-        env = update_secret("v2-devel", env)
-        env["api"] = "v2-devel"
+        api = "v2-devel"
+        env, errors = get_conf(CONF)
+
+        errors = validate_conf(env, api)
+        if errors != None:
+            return app.response_class(
+                response="Error validating config!\n\n" + errors,
+                status=400,
+                mimetype="text/plain",
+            )
+        env = update_secret(api, env)
+        env.setdefault("api", api)
+
+        env = interface_flatten(env)
         return app.response_class(
-            response=render_template(os.path.join("v2-devel", FILE), **env),
+            response=render_template(os.path.join(api, FILE), **env),
             status=200,
             mimetype="text/plain",
         )
@@ -196,7 +292,10 @@ def main():
     parser_client = subparsers.add_parser("client")
     parser_client.set_defaults(func=client)
     parser_client.add_argument(
-        "input", metavar="inputYaml", action="store", help="YAML file to read vars from"
+        "input",
+        metavar="configFile",
+        action="store",
+        help="configuration file to read vars from",
     )
     parser_client.add_argument(
         "filename",

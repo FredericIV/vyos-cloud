@@ -1,18 +1,22 @@
+{% import api ~ '/macros.j2' as macros -%}
 incoming:
   listen:
     - 127.0.0.1
-    - {{eth1.address|hostaddress}}
     - '::1'
+{%- for i in flat_int if i.address is defined %}
+    - {{i.address|hostaddress}}
+{% endfor %}
   non_local_bind: true
 recursor:
   forward_zones:
-    - zone: {{dns.forward_domain}}
+{% for i in flat_int if i.address is defined and i.forward_domain is defined%}    - zone: {{i.forward_domain}}
       forwarders:
       - 127.0.0.1:5354
       - '[::1]:5354'
-    - zone: {{dns.reverse_domain}}
+    - zone: {{i.address|netaddress("reverse")}}
       forwarders:
       - 127.0.0.1:5354
       - '[::1]:5354'
+{% endfor -%}
 dnssec:
   validation: process-no-validate

@@ -12,12 +12,12 @@
         "tsig-keys": [ {
             "name": "dhcp",
             "algorithm": "HMAC-SHA256",
-            "secret": "{{dns.ddns_tsig_key}}"
+            "secret": "{{dns.tsig_key}}"
         } ],
         "forward-ddns": {
-            "ddns-domains": [
+            "ddns-domains": [ {%- for interface in flat_int if interface.forward_domain is defined %}
                 {
-                    "name": "{{dns.forward_domain}}.",
+                    "name": "{{interface.forward_domain}}.",
                     "key-name": "dhcp",
                     "dns-servers": [
                         {
@@ -25,13 +25,13 @@
                             "port": 5354
                         }
                     ]
-                }
+                }{{ ", " if not loop.last else ""}}{% endfor %}
              ]
         },
         "reverse-ddns": {
-            "ddns-domains":[
+            "ddns-domains":[ {%- for interface in flat_int if interface.forward_domain is defined %}
                 {
-                    "name": "{{eth1.address|netaddress("reverse")}}.",
+                    "name": "{{interface.address|netaddress("reverse")}}.",
                     "key-name": "dhcp",
                     "dns-servers": [
                         {
@@ -39,7 +39,7 @@
                             "port": 5354
                         }
                     ]
-                }
+                }{{ ", " if not loop.last else ""}}{% endfor %}
              ]
         }
     }

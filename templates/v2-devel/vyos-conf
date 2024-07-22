@@ -1,15 +1,4 @@
-{% macro lid(var) -%}
-{% if var is defined and var is sequence and var is not string and var is not integer -%}
-{% for item in var -%}
-{{caller(item)}}
-{% endfor -%}
-{% endif -%}
-{%- endmacro -%}
-{% macro defAndNotEmpty(var) -%}
-{% if var is defined and var and var|length %}
-{{true}}
-{% endif -%}
-{%- endmacro -%}
+{% import api ~ '/macros.j2' as macros -%}
 
 delete interfaces
 delete protocols
@@ -106,15 +95,16 @@ set system conntrack modules sqlnet
 set system conntrack modules tftp
 set system console device ttyS0 speed '115200'
 set system host-name '{{hostname}}'
-set system domain-name '{{dns.forward_domain}}'
-{% call (server) lid(system_search_domains) %}
+{% call (server) macros.lid(system_search_domains) %}
 set system domain-search domain '{{server}}'
 {% endcall %}
-set system domain-search domain '{{dns.forward_domain}}'
+{% for i in flat_int if i.forward_domain is defined %}
+set system domain-search domain '{{i.forward_domain}}'
+{% endfor %}
 
 {% if users is defined and users is sequence and users is not string and users is not integer %}
 {% for user in users %}
-{% call (key) lid(user.ssh_keys) %}
+{% call (key) macros.lid(user.ssh_keys) %}
 set system login user {{user.username}} authentication public-keys {{key.name}} key '{{key.key}}'
 set system login user {{user.username}} authentication public-keys {{key.name}} type '{{key.type}}'
 {% endcall %}
@@ -138,7 +128,7 @@ set system update-check auto-check
 set system update-check url 'https://raw.githubusercontent.com/vyos/vyos-rolling-nightly-builds/main/version.json'
 {% endif %}
 
-{% call (entry) lid(syslog) %}
+{% call (entry) macros.lid(syslog) %}
 {% if entry.host is defined %}
 set system syslog host {{entry.host}} facility {{entry.facility|default("all")}} level {{entry.level|default("info")}}
 set system syslog host {{entry.host}} port {{entry.port|default("514")}}
@@ -211,6 +201,6 @@ set container name postgres volume pgdata destination '/var/lib/postgresql/data'
 set container name postgres volume pgdata mode 'rw'
 set container name postgres volume pgdata source '/opt/vyatta/etc/config/containers/postgres/data'
 
-{% call (conf) lid(additional_configuration) %}
+{% call (conf) macros.lid(additional_configuration) %}
 {{conf}}
 {% endcall -%}
