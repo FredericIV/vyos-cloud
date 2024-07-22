@@ -1,5 +1,6 @@
 {% import api ~ '/macros.j2' as macros -%}
-
+{#- convenience function to strip excess whitespace. Allows us to indent#}
+{% call () macros.edit(none) %}
 delete interfaces
 delete protocols
 delete service
@@ -54,34 +55,59 @@ set firewall ipv4 name VyOS_MANAGEMENT rule 21 action 'accept'
 set firewall ipv4 name VyOS_MANAGEMENT rule 21 state 'new'
 
 {% for interface in interfaces %}
-{%if interface.address is defined%}set interfaces ethernet eth{{loop.index0}} address '{{interface.address}}'{%endif%}
-{%if interface.description is defined%}set interfaces ethernet eth{{loop.index0}} description '{{interface.description}}'{%endif%}
-set interfaces ethernet eth{{loop.index0}} offload gro
-set interfaces ethernet eth{{loop.index0}} offload gso
-set interfaces ethernet eth{{loop.index0}} offload sg
-{% if interface.ospf is defined -%}
-{% if interface.ospf.hello %}set protocols ospf interface eth{{loop.index0}} passive disable{% endif %}
-set protocols ospf interface eth{{loop.index0}} bfd
-set protocols ospf interface eth{{loop.index0}} area {{interface.ospf.area}}
-{% if (interface.ospf.auth_id is defined and defAndNotEmpty(interface.ospf.auth_id)) -%}
-set protocols ospf interface eth{{loop.index0}} authentication md5 key-id {{interface.ospf.auth_id}} md5-key '{{interface.ospf.auth_key}}'
-{%endif%}
-{%endif%}
-{%endfor%}
+    {% if interface.address is defined %}
+        set interfaces ethernet eth{{ interface.id }} address '{{ interface.address }}'
+    {% endif %}
+    {% if interface.dhcp %}
+        set interfaces ethernet eth{{ interface.id }} address 'dhcp'
+    {% endif %}
+    {% if interface.description is defined %}
+        set interfaces ethernet eth{{ interface.id }} description '{{ interface.description }}'
+    {% endif %}
+    set interfaces ethernet eth{{ interface.id }} offload gro
+    set interfaces ethernet eth{{ interface.id }} offload gso
+    set interfaces ethernet eth{{ interface.id }} offload sg
+    {% if interface.ospf is defined -%}
+        {% if interface.ospf.hello %}
+            set protocols ospf interface eth{{loop.index0}} passive disable
+        {% endif %}
+        set protocols ospf interface eth{{ interface.id }} bfd
+        set protocols ospf interface eth{{ interface.id }} area {{interface.ospf.area}}
+            {% if (interface.ospf.auth_id is defined and defAndNotEmpty(interface.ospf.auth_id)) -%}
+            set protocols ospf interface eth{{ interface.id }} authentication md5 key-id {{interface.ospf.auth_id}} md5-key '{{interface.ospf.auth_key}}'
+            {% endif %}
+    {% endif %}
+    {% call (subint) macros.lid(interface.subinterfaces) %}
+        set interfaces ethernet eth{{ interface.id }} vif {{subint.id}} address '{{subint.address}}'
+        {% if subint.description is defined %}
+            set interfaces ethernet eth{{ interface.id }} vif {{ subint.id }} description '{{ subint.description }}'
+        {% endif %}
+        {% if subint.ospf is defined -%}
+            {% if subint.ospf.hello %}
+                set protocols ospf interface eth{{ interface.id }}.{{ subint.id }} passive disable
+            {% endif %}
+            set protocols ospf interface eth{{ interface.id }}.{{ subint.id }} bfd
+            set protocols ospf interface eth{{ interface.id }}.{{ subint.id }} area {{subint.ospf.area}}
+                {% if (subint.ospf.auth_id is defined and defAndNotEmpty(subint.ospf.auth_id)) -%}
+                    set protocols ospf interface eth{{ interface.id }}.{{ subint.id }} authentication md5 key-id {{subint.ospf.auth_id}} md5-key '{{subint.ospf.auth_key}}'
+                {% endif %}
+        {% endif %}
+    {% endcall %}
+{% endfor %}
 set interfaces loopback lo
 set protocols ospf auto-cost reference-bandwidth '10000'
 set protocols ospf passive-interface 'default'
 
 set service ntp allow-client address '0.0.0.0/0'
 set service ntp allow-client address '::/0'
-{% if system_ntp_servers is defined and system_ntp_servers is sequence and system_ntp_servers is not string and system_ntp_servers is not integer %}
-{% for server in system_ntp_servers %}
-set service ntp server {{server}}
-{% endfor %}
+{% if ntp_servers is defined and ntp_servers is sequence and ntp_servers is not string and ntp_servers is not integer %}
+    {% for server in ntp_servers %}
+        set service ntp server {{ server }}
+    {% endfor %}
 {% else %}
-set service ntp server 0.pool.ntp.org
-set service ntp server 1.pool.ntp.org
-set service ntp server 2.pool.ntp.org
+    set service ntp server 0.pool.ntp.org
+    set service ntp server 1.pool.ntp.org
+    set service ntp server 2.pool.ntp.org
 {% endif %}
 
 set service ssh port '22'
@@ -204,3 +230,4 @@ set container name postgres volume pgdata source '/opt/vyatta/etc/config/contain
 {% call (conf) macros.lid(additional_configuration) %}
 {{conf}}
 {% endcall -%}
+{% endcall %}
