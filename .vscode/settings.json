@@ -1,7 +1,7 @@
 {
     "files.associations": {
         "vendor-data": "jinja-yaml",
-        "vyos": "jinja",
+        "vyos-conf": "jinja",
         "user-data": "jinja-yaml",
         "pdns-recursor-conf": "jinja-yaml",
         "pdns-auth-conf": "jinja",
