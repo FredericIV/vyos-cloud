@@ -12,7 +12,7 @@
             "type": "string"
         }
     },
-    "$id": "/vyos-cloud.v2.schema.json",
+    "$id": "/vyos-cloud.v2-devel.schema.json",
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "additionalProperties": false,
     "description": "Configuration for vyos-cloud cloud-init generator",
@@ -23,6 +23,10 @@
                 "type": "string"
             },
             "type": "array"
+        },
+        "api": {
+            "const": "v2-devel",
+            "default": "v2-devel"
         },
         "databases": {
             "additionalProperties": false,
@@ -39,41 +43,6 @@
                 }
             },
             "title": "Database settings",
-            "type": "object"
-        },
-        "dhcp": {
-            "additionalProperties": false,
-            "properties": {
-                "pools": {
-                    "items": {
-                        "example": [
-                            "10.0.5.100-10.0.5.200",
-                            "10.0.5.248/30"
-                        ],
-                        "type": "string"
-                    },
-                    "minItems": 1,
-                    "type": "array"
-                },
-                "reservations": {
-                    "items": {
-                        "additionalProperties": false,
-                        "properties": {
-                            "ip": {
-                                "type": "string"
-                            },
-                            "mac": {
-                                "type": "string"
-                            }
-                        },
-                        "type": "object"
-                    },
-                    "type": "array"
-                }
-            },
-            "required": [
-                "pools"
-            ],
             "type": "object"
         },
         "disable_update_check": {
@@ -143,18 +112,17 @@
                     "description": "API key for DNS updates. Existence enables api.",
                     "type": "string"
                 },
-                "forward_domain": {
-                    "type": "string"
-                },
                 "tsig_key": {
                     "description": "TSIG key for DNS updates",
                     "type": "string"
                 }
             },
-            "required": [
-                "forward_domain"
-            ],
             "type": "object"
+        },
+        "hostname": {
+            "description": "Hostname of the router",
+            "format": "hostname",
+            "type": "string"
         },
         "interfaces": {
             "description": "Interfaces 0-N. It's a router, so at least one should be configured.",
@@ -162,19 +130,52 @@
                 "additionalProperties": false,
                 "description": "Interface configuration",
                 "properties": {
-                    "addresses": {
-                        "items": {
-                            "$ref": "#/$defs/ipv4-w-cidr"
-                        },
-                        "type": "array"
+                    "address": {
+                        "$ref": "#/$defs/ipv4-w-cidr"
                     },
                     "description": {
                         "description": "Interface description",
                         "type": "string"
                     },
-                    "dhcp": {
+                    "dhcp_client": {
                         "description": "Enable DHCP client on this interface",
                         "type": "boolean"
+                    },
+                    "dhcp_server": {
+                        "additionalProperties": false,
+                        "description": "Enable DHCP server on this interface",
+                        "properties": {
+                            "pools": {
+                                "items": {
+                                    "example": [
+                                        "10.0.5.100-10.0.5.200",
+                                        "10.0.5.248/30"
+                                    ],
+                                    "type": "string"
+                                },
+                                "minItems": 1,
+                                "type": "array"
+                            },
+                            "reservations": {
+                                "items": {
+                                    "additionalProperties": false,
+                                    "properties": {
+                                        "hw_address": {
+                                            "type": "string"
+                                        },
+                                        "ip_address": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                },
+                                "type": "array"
+                            }
+                        },
+                        "required": [
+                            "pools"
+                        ],
+                        "type": "object"
                     },
                     "firewall": {
                         "description": "Specify default inbound firewall configuration.",
@@ -183,6 +184,10 @@
                             "deny",
                             "nat"
                         ],
+                        "type": "string"
+                    },
+                    "forward_domain": {
+                        "format": "hostname",
                         "type": "string"
                     },
                     "id": {
@@ -251,6 +256,14 @@
             "minItems": 1,
             "type": "array"
         },
+        "ntp_servers": {
+            "description": "NTP servers. Defaults to ntp.org",
+            "items": {
+                "format": "hostname",
+                "type": "string"
+            },
+            "type": "array"
+        },
         "ospf": {
             "additionalProperties": false,
             "properties": {
@@ -287,19 +300,19 @@
                     "description": "Hash type. Defaults to sha256.",
                     "type": "string"
                 },
+                "id": {
+                    "description": "Defaults to hostname",
+                    "type": "string"
+                },
                 "interval": {
+                    "default": 60,
                     "description": "Interval in minutes.",
-                    "type": "integer",
-                    "default": 60
+                    "type": "integer"
                 },
                 "master": {
                     "type": "string"
                 },
                 "master_key": {
-                    "type": "string"
-                },
-                "id": {
-                    "description": "Defaults to hostname",
                     "type": "string"
                 }
             },
@@ -394,13 +407,6 @@
             "description": "Name servers. Defaults to google.",
             "items": {
                 "$ref": "#/$defs/ipv4-wo-cidr"
-            },
-            "type": "array"
-        },
-        "system_ntp_servers": {
-            "description": "System ntp servers. Defaults to ntp.org",
-            "items": {
-                "type": "string"
             },
             "type": "array"
         },

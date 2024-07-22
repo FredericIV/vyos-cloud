@@ -1,0 +1,39 @@
+{
+    "$id": "/vyos-cloud.v2.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "description": "Configuration for vyos-cloud cloud-init generator",
+    "properties": {
+        "api": {
+            "const": "v1",
+            "default": "v1"
+        },
+        "DDNS_KEY": {
+            "type": "string"
+        },
+        "DOMAIN": {
+            "format": "hostname",
+            "type": "string"
+        },
+        "KEA_DB_PASSWORD": {
+            "type": "string"
+        },
+        "PDNS_DB_PASSWORD": {
+            "type": "string"
+        },
+        "POSTGRES_PASSWORD": {
+            "type": "string"
+        },
+        "VLAN": {
+            "maximum": 4094,
+            "minimum": 1,
+            "type": "number"
+        }
+    },
+    "required": [
+        "VLAN",
+        "DOMAIN"
+    ],
+    "title": "vyos-cloud",
+    "type": "object"
+}
