@@ -2,7 +2,7 @@
 import argparse
 import base64
 import ipaddress
-from jinja2 import Environment, FileSystemLoader, select_autoescape
+import jinja2
 import os
 import secrets
 import yaml
@@ -161,9 +161,9 @@ def get_conf(name: str, api: str) -> tuple[str, str]:
 
 
 def client(args):
-    env = Environment(
-        loader=FileSystemLoader("templates"),
-        autoescape=select_autoescape(),
+    env = jinja2.Environment(
+        loader=jinja2.FileSystemLoader("templates"),
+        autoescape=jinja2.select_autoescape(),
     )
     env.filters["hostaddress"] = filter_hostaddress
     env.filters["netaddress"] = filter_netaddress
@@ -246,24 +246,31 @@ def server(args):
     @app.route("/v2-devel/<string:CONF>/<string:FILE>")
     def v2Path(CONF, FILE):
         api = "v2-devel"
-        env, errors = get_conf(CONF)
-
-        errors = validate_conf(env, api)
+        env, errors = get_conf(CONF, api)
         if errors != None:
             return app.response_class(
-                response="Error validating config!\n\n" + errors,
+                response="Error 400\n\n" + errors,
                 status=400,
                 mimetype="text/plain",
             )
-        env = update_secret(api, env)
-        env.setdefault("api", api)
-
-        env = interface_flatten(env)
-        return app.response_class(
-            response=render_template(os.path.join(api, FILE), **env),
-            status=200,
-            mimetype="text/plain",
-        )
+        try:
+            return app.response_class(
+                response=render_template(os.path.join(api, FILE), **env),
+                status=200,
+                mimetype="text/plain",
+            )
+        except jinja2.TemplateNotFound as e:
+            return app.response_class(
+                response="Error 404\n\nTemplate not found!\nTemplate:" + str(e),
+                status=404,
+                mimetype="text/plain",
+            )
+        except Exception as e:
+            return app.response_class(
+                response="Error!\n\n" + str(e),
+                status=400,
+                mimetype="text/plain",
+            )
 
     logger = logging.getLogger("waitress")
     logger.setLevel(logging.INFO)  # TODO: add request logging
