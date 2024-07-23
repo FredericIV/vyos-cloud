@@ -30,7 +30,7 @@
         },
         "databases": {
             "additionalProperties": false,
-            "description": "Passwords. Undefined passwords auto-generate",
+            "description": "Undefined passwords auto-generate",
             "properties": {
                 "admin_db_password": {
                     "type": "string"
@@ -40,6 +40,10 @@
                 },
                 "dns_db_password": {
                     "type": "string"
+                },
+                "version": {
+                    "type": "integer",
+                    "description": "Version of postgres. Defaults to current stable. Only needed if you are replacing a node in a HA set."
                 }
             },
             "title": "Database settings",
@@ -194,7 +198,7 @@
                         "description": "Interface id (the N of ethN or vif N)",
                         "maximum": 4095,
                         "minimum": 0,
-                        "type": "number"
+                        "type": "integer"
                     },
                     "isInfra": {
                         "default": false,
@@ -217,12 +221,12 @@
                                 "description": "OSPF area. Also enables OSPF.",
                                 "maximum": 2147483647,
                                 "minimum": 0,
-                                "type": "number"
+                                "type": "integer"
                             },
                             "auth_id": {
                                 "maximum": 255,
                                 "minimum": 0,
-                                "type": "number"
+                                "type": "integer"
                             },
                             "auth_key": {
                                 "type": "string"
@@ -265,32 +269,37 @@
             "type": "array"
         },
         "ospf": {
-            "additionalProperties": false,
-            "properties": {
-                "additional_networks": {
-                    "description": "Networks associated with an interface will automatically be added. You probably don't need this option.",
-                    "items": {
-                        "$ref": "#/$defs/ipv4-w-cidr"
+            "items": {
+                "properties": {
+                    "additional_networks": {
+                        "description": "Networks associated with an interface will automatically be added. You probably don't need this option.",
+                        "items": {
+                            "$ref": "#/$defs/ipv4-w-cidr"
+                        },
+                        "type": "array"
                     },
-                    "type": "array"
+                    "area": {
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "type": "integer"
+                    },
+                    "auth": {
+                        "default": "false",
+                        "type": "boolean"
+                    }
                 },
-                "area": {
-                    "maximum": 2147483647,
-                    "minimum": 0,
-                    "type": "number"
-                },
-                "auth": {
-                    "default": "false",
-                    "type": "boolean"
-                }
+                "required": [
+                    "area"
+                ],
+                "type": "object"
             },
-            "type": "object"
+            "type": "array"
         },
         "router_id": {
             "description": "Used for vrrp, ospf, and hostname. MUST BE UNIQUE.",
             "maximum": 255,
             "minimum": 0,
-            "type": "number"
+            "type": "integer"
         },
         "salt": {
             "additionalProperties": false,
