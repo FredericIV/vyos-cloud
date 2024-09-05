@@ -280,7 +280,7 @@ def server(env:argparse.Namespace) -> None:
             404,
         )
 
-    @app.route("/v1/<string:VLAN>/<string:DOMAIN>/<string:FILE>")
+    @app.route("/v1/<string:VLAN>/<string:DOMAIN>/<path:FILE>")
     def v1Path(VLAN, DOMAIN, FILE):
         if request.args.get("archive", default="") != "":
             return app.response_class(
@@ -316,7 +316,7 @@ def server(env:argparse.Namespace) -> None:
             mimetype="text/plain",
         )
 
-    @app.route("/v2-devel/<string:CONF>/<string:FILE>")
+    @app.route("/v2-devel/<string:CONF>/<path:FILE>")
     def v2Path(CONF, FILE):
         api = "v2-devel"
         env, errors = get_conf(CONF, api)
