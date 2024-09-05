@@ -1,0 +1,59 @@
+resources:
+- name: container.vyos-cloud
+  type: registry-image
+  icon: docker
+  check_every: never
+  source:
+    repository: gitea.fabiv.pw/fborries/vyos-cloud
+    username: ((fborries-gitea.username))
+    password: ((fborries-gitea.password))
+- name: container.python
+  type: registry-image
+  icon: docker
+  check_every: 6h
+  source:
+    tag: slim
+    repository: docker.io/library/python
+- name: repo
+  type: git
+  source:
+    uri: https://gitea.fabiv.pw/fborries/vyos-cloud.git
+    username: ((fborries-gitea.username))
+    password: ((fborries-gitea.password))
+jobs:
+- name: build-push-container
+  plan:
+  - get: container.python
+    trigger: true
+    skip_download: true
+  - get: repo
+    trigger: true
+  - task: build-vyos-cloud
+      privileged: true
+      config:
+        platform: linux
+        image_resource:
+          type: registry-image
+          source:
+            repository: gcr.io/kaniko-project/executor
+            tag: debug
+        run:
+          path: sh
+          args:
+          - "-exc"
+          - |
+            sed 's/\:[0-9]*/\:1/' /etc/resolv.conf > /kaniko/resolv.conf
+            cat /kaniko/resolv.conf > /etc/resolv.conf
+            rm /kaniko/resolv.conf
+            /kaniko/executor \
+            --dockerfile=repo/Containerfile \
+            --context=dir://repo/ \
+            --tar-path=build-vyos-cloud/image.tar \
+            --destination=gitea.fabiv.pw/fborries/vyos-cloud:latest \
+            --no-push --reproducible
+        inputs: [{"name":"repo"}]
+        outputs: [{"name":"build-vyos-cloud"}]
+  - put: container.vyos-cloud
+    inputs: detect
+    params:
+      image: build-vyos-cloud/image.tar
