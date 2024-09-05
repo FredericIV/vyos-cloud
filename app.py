@@ -9,6 +9,10 @@ import yaml
 import json
 import jsonschema
 import copy
+import zipfile
+import io
+from typing import Callable
+from sys import stderr
 
 
 def filter_hostaddress(value, purpose=None):
@@ -159,8 +163,29 @@ def get_conf(name: str, api: str) -> tuple[str, str]:
             return (None, "Invalid api")
     return (env, None)
 
+def ret_zip(render:Callable[[os.PathLike],str], api:str) -> io.BytesIO:
+    ret_buffer = io.BytesIO()
+    with zipfile.ZipFile(ret_buffer, "w") as myzip:
+        os.chdir(template_dir)
+        for root, dirs, files in os.walk(api):
+            for dir in dirs:
+                myzip.mkdir(os.path.join(root, dir))
+            for file in files:
+                myzip.writestr(
+                    os.path.join(root, file),
+                    render(os.path.join(root, file)),
+                )
+    os.chdir("..")
+    return ret_buffer
 
-def client(args):
+def ret_archive(render:Callable[[os.PathLike],str], api:str, type:str) -> io.BytesIO:
+    if type == "zip":
+        return ret_zip(render, api)
+    else:
+        print("Invalid archive type", file=stderr)
+        return None
+
+def client(args:argparse.Namespace) -> None:
     env = jinja2.Environment(
         loader=jinja2.FileSystemLoader("templates"),
         autoescape=jinja2.select_autoescape(),
@@ -169,14 +194,20 @@ def client(args):
     env.filters["netaddress"] = filter_netaddress
     env.globals, error = get_conf(args.input, args.api)
     if error != None:
-        print(error)
+        print(error,file=stderr)
         exit(1)
-    print(env.get_template(os.path.join(args.api, args.filename)).render())
-    exit(0)
+    if args.archive == "":
+        print(env.get_template(os.path.join(args.api, args.filename)).render())
+        exit(0)
+    if val := ret_archive(lambda x: env.get_template(x).render(), args.api, args.archive):
+        with open(args.filename, "wb") as f:
+            f.write(val.getvalue())
+    else:
+        print("Error making archive", file=stderr)
+        exit(1)
 
-
-def server(args):
-    from flask import Flask, render_template_string, render_template
+def server(env:argparse.Namespace) -> None:
+    from flask import Flask, render_template_string, render_template, request
     from waitress import serve
     import logging
 
@@ -198,12 +229,32 @@ def server(args):
     """
     welcome_embed = """<h1>NoCloud Cloud-Init</h1>
     <h3>Usage</h3>
+    <h4>api v1</h4>
     <p>
-        <code>http(s)://host/v1/VLAN/DOMAIN/[filename]</code>
+        <code>http(s)://HOST/v1/VLAN/DOMAIN/FILEPATH</code>
+        <code>http(s)://HOST/v1/VLAN/DOMAIN/FILENAME?archive=zip</code>
     </p>
     <ul>
         <li>Serves the user-data and meta-data endpoints required by Cloud-Init.</li>
-    </ul>"""
+        <li>Replace VLAN with the VLAN number.</li>
+        <li>Replace DOMAIN with the domain name.</li>
+        <li>Replace filepath/filename with the desired file path/name.</li>
+        <li>Use the archive query parameter to download all files in an archive. Only zip is supported at the moment.</li>
+    </ul>
+    <h4>api v2-devel</h4>
+    <p>
+        <code>http(s)://HOST/v2-devel/CONF/FILEPATH</code>
+        <code>http(s)://HOST/v2-devel/CONF/FILENAME?archive={zip}</code>
+    </p>
+    <ul>
+        <li>Serves the user-data and meta-data endpoints required by Cloud-Init.</li>
+        <li>Replace CONF with the configuration file name.</li>
+        <li>Replace filepath/filename with the desired file path/name.</li>
+        <li>Use the archive query parameter to download all files in an archive. Only zip is supported at the moment.</li>
+    </ul>
+    <p>Example 1: <a href="/v1/100/example.com/user-data">/v1/100/example.com/user-data</a></p>
+    <p>Example 2: <a href="/v2-devel/example-v2/kea/kea-dhcp4.json">/v2-devel/example-v2/kea/kea-dhcp4.conf</a></p>
+    """
 
     @app.route("/")
     def welcome():
@@ -228,6 +279,25 @@ def server(args):
 
     @app.route("/v1/<string:VLAN>/<string:DOMAIN>/<string:FILE>")
     def v1Path(VLAN, DOMAIN, FILE):
+        if request.args.get("archive", default="") != "":
+            return app.response_class(
+                response=ret_archive(
+                    lambda x: render_template(
+                        x,
+                        api="v1",
+                        VLAN=VLAN,
+                        DOMAIN=DOMAIN,
+                        PDNS_DB_PASSWORD=gen_secret(),
+                        KEA_DB_PASSWORD=gen_secret(),
+                        POSTGRES_PASSWORD=gen_secret(),
+                        DDNS_KEY=gen_secret("tsig"),
+                    ),
+                    "v1",
+                    request.args.get("archive")
+                ).getvalue(),
+                status=200,
+                mimetype="application/octet-stream"
+            )
         return app.response_class(
             response=render_template(
                 os.path.join("v1", FILE),
@@ -252,6 +322,12 @@ def server(args):
                 response="Error 400\n\n" + errors,
                 status=400,
                 mimetype="text/plain",
+            )
+        if request.args.get("archive", default="") != "":
+            return app.response_class(
+                response=ret_archive(lambda x: render_template(x, **env), api, request.args.get("archive")).getvalue(),
+                status=200,
+                mimetype="application/octet-stream"
             )
         try:
             return app.response_class(
@@ -316,6 +392,14 @@ def main():
         action="store",
         default="v1",
         help="version of template to use; defaults to v1",
+    )
+    parser_client.add_argument(
+        "-t",
+        "--archive",
+        action="store",
+        default="",
+        help="render all templates to an archive type specified here and the archive name specified by filename",
+        choices=["zip"],
     )
 
     args = parser.parse_args()
