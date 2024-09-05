@@ -1,11 +1,11 @@
 FROM docker.io/python:slim
 
 WORKDIR /usr/src/app
-COPY requirements.txt ./
+COPY requirements.txt /tmp/
 ENV DEBIAN_FRONTEND=noninteractive
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
-COPY . .
+COPY --exclude=requirements.txt .
 
 EXPOSE 8080/tcp
 ENV CLOUD_INIT_HOST="0.0.0.0"
