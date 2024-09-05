@@ -75,7 +75,7 @@ set firewall ipv4 name VyOS_MANAGEMENT rule 21 state 'new'
         {% endif %}
         set protocols ospf interface eth{{ interface.id }} bfd
         set protocols ospf interface eth{{ interface.id }} area {{interface.ospf.area}}
-            {% if (interface.ospf.auth_id is defined and defAndNotEmpty(interface.ospf.auth_id)) -%}
+            {% if (interface.ospf.auth_id is defined and interface.ospf.auth_id) -%}
             set protocols ospf interface eth{{ interface.id }} authentication md5 key-id {{interface.ospf.auth_id}} md5-key '{{interface.ospf.auth_key}}'
             {% endif %}
     {% endif %}
@@ -92,7 +92,7 @@ set firewall ipv4 name VyOS_MANAGEMENT rule 21 state 'new'
             {% endif %}
             set protocols ospf interface eth{{ interface.id }}.{{ subint.id }} bfd
             set protocols ospf interface eth{{ interface.id }}.{{ subint.id }} area {{subint.ospf.area}}
-                {% if (subint.ospf.auth_id is defined and defAndNotEmpty(subint.ospf.auth_id)) -%}
+                {% if (subint.ospf.auth_id is defined and subint.ospf.auth_id) -%}
                     set protocols ospf interface eth{{ interface.id }}.{{ subint.id }} authentication md5 key-id {{subint.ospf.auth_id}} md5-key '{{subint.ospf.auth_key}}'
                 {% endif %}
         {% endif %}
