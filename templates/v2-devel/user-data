@@ -24,7 +24,7 @@ write_files:
     owner: root:root
     permissions: '0664'
     content: |
-{% call macros.edit("     ") -%}
+{% call macros.edit("      ") -%}
 {%- include api ~ '/pdns-auth-conf' %}
 {%- endcall %}
 
@@ -32,7 +32,7 @@ write_files:
     owner: root:root
     permissions: '0664'
     content: |
-{% call macros.edit("     ") -%}
+{% call macros.edit("      ") -%}
 {%- include api ~ '/pdns-recursor-conf' %}
 {%- endcall %}
 
@@ -41,7 +41,7 @@ write_files:
     owner: root:root
     permissions: '0664'
     content: |
-{% call macros.edit("     ") -%}
+{% call macros.edit("      ") -%}
 {%- include api ~ '/kea/' ~ file ~ '.json' %}
 {%- endcall %}
 {% endfor %}
@@ -51,7 +51,7 @@ write_files:
     owner: root:root
     permissions: '0664'
     content: |
-{% call macros.edit("     ") -%}
+{% call macros.edit("      ") -%}
 {%- include api ~ '/postgres/' ~ file %}
 {%- endcall %}
 {% endfor %}
@@ -60,7 +60,7 @@ write_files:
     owner: root:root
     permissions: '0775'
     content: |
-{% call macros.edit("     ") -%}
+{% call macros.edit("      ") -%}
 {%- include api ~ '/postgres/pg.sh' %}
 {%- endcall %}
 
@@ -68,6 +68,6 @@ write_files:
   - path: /opt/vyatta/etc/config/containers/kea-sockets/touch
 
 vyos_config_commands:
-{% call macros.edit("  -") -%}
+{% call macros.edit("  - ") -%}
 {%- include api ~ '/vyos-conf' %}
 {%- endcall %}

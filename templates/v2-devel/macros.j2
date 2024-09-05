@@ -12,13 +12,14 @@
 {% endif -%}
 {%- endmacro -%}
 
+{#- none flattens and removes excess whitespace, "" just removes excess newlines -#}
 {%- macro edit(text) -%}
 {% for line in caller().split("\n") -%}
-{% if line -%}
+{% if line and not line.isspace()  -%}
 {% if text is none -%}
 {{line.strip()}}
 {% else -%}
-{{text ~ " " ~ line}}
+{{text ~ line}}
 {% endif -%}
 {% endif -%}
 {% endfor -%}
