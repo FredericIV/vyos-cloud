@@ -26,3 +26,16 @@
 
 {# For use with lid. Otherwise, use {{ ", " if not loop.last else ""}} or similar. #}
 {%- macro stripTrailing(suffix=", ") %}{{caller().removesuffix(suffix)}}{% endmacro %}
+
+{% set PDNS_AUTH_VER = "49" %}
+{% set PDNS_RECURSOR_VER = "51" %}
+{% set POSTGRES_VER = "16"%}
+{% macro PDNS_AUTH_IMAGE(ver) %}
+docker.io/powerdns/pdns-auth-{{ver}}:latest
+{% endmacro %}
+{% macro PDNS_RECURSOR_IMAGE(ver) %}
+docker.io/powerdns/pdns-recursor-{{ver}}:latest
+{% endmacro %}
+{% macro POSTGRES_IMAGE(ver) %}
+docker.io/postgres:{{ver}}-alpine
+{% endmacro %}

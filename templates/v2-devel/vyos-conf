@@ -14,7 +14,7 @@ set firewall group port-group INFRA_BACKEND port '5432'
 set firewall group port-group INFRA_BACKEND port '5354'
 set firewall group port-group INFRA_BACKEND port '8000'
 set firewall group port-group VYOS_MANAGEMENT port '22'
-set firewall group port-group VYOS_SERVICES port '853'
+set firewall group port-group VYOS_SERVICES port '5354'
 set firewall group port-group VYOS_SERVICES port '53'
 set firewall group port-group VYOS_SERVICES port '67'
 set firewall ipv4 input filter default-action 'drop'
@@ -40,7 +40,7 @@ set firewall ipv4 input filter rule 60 destination group port-group 'VYOS_MANAGE
 set firewall ipv4 input filter rule 60 jump-target 'VyOS_MANAGEMENT'
 set firewall ipv4 input filter rule 60 protocol 'tcp'
 set firewall ipv4 input filter rule 60 state 'new'
-set firewall ipv4 input filter rule 999 action 'accept'
+set firewall ipv4 input filter rule 999 action 'drop'
 set firewall ipv4 input filter rule 999 log
 set firewall ipv4 name CONN_FILTER default-action 'return'
 set firewall ipv4 name CONN_FILTER rule 10 action 'accept'
@@ -71,7 +71,7 @@ set firewall ipv4 name VyOS_MANAGEMENT rule 21 state 'new'
     set interfaces ethernet eth{{ interface.id }} offload sg
     {% if interface.ospf is defined -%}
         {% if interface.ospf.hello %}
-            set protocols ospf interface eth{{loop.index0}} passive disable
+            set protocols ospf interface eth{{ interface.id }} passive disable
         {% endif %}
         set protocols ospf interface eth{{ interface.id }} bfd
         set protocols ospf interface eth{{ interface.id }} area {{interface.ospf.area}}
@@ -80,7 +80,9 @@ set firewall ipv4 name VyOS_MANAGEMENT rule 21 state 'new'
             {% endif %}
     {% endif %}
     {% call (subint) macros.lid(interface.subinterfaces) %}
+        {% if subint.address is defined %}
         set interfaces ethernet eth{{ interface.id }} vif {{subint.id}} address '{{subint.address}}'
+        {% endif %}
         {% if subint.description is defined %}
             set interfaces ethernet eth{{ interface.id }} vif {{ subint.id }} description '{{ subint.description }}'
         {% endif %}
@@ -96,9 +98,18 @@ set firewall ipv4 name VyOS_MANAGEMENT rule 21 state 'new'
         {% endif %}
     {% endcall %}
 {% endfor %}
+{% call (ospf_i) macros.lid(ospf) %}
+    {% call (net) macros.lid(ospf_i.additional_networks) %}
+        set protocols ospf area {{ ospf_i.area }} network {{ net }}
+    {% endcall %}
+    {% if ospf_i.auth %}
+        set protocols ospf area {{ ospf_i.area }} authentication md5
+    {% endif %}
+{% endcall %}
 set interfaces loopback lo
 set protocols ospf auto-cost reference-bandwidth '10000'
 set protocols ospf passive-interface 'default'
+set protocols ospf default-information originate
 
 set service ntp allow-client address '0.0.0.0/0'
 set service ntp allow-client address '::/0'
@@ -124,10 +135,10 @@ set system conntrack modules tftp
 set system console device ttyS0 speed '115200'
 set system host-name '{{hostname}}'
 {% call (server) macros.lid(system_search_domains) %}
-set system domain-search domain '{{server}}'
+set system domain-search '{{server}}'
 {% endcall %}
 {% for i in flat_int if i.forward_domain is defined %}
-set system domain-search domain '{{i.forward_domain}}'
+set system domain-search '{{i.forward_domain}}'
 {% endfor %}
 
 {% if users is defined and users is sequence and users is not string and users is not integer %}
@@ -136,8 +147,8 @@ set system domain-search domain '{{i.forward_domain}}'
 set system login user {{user.username}} authentication public-keys {{key.name}} key '{{key.key}}'
 set system login user {{user.username}} authentication public-keys {{key.name}} type '{{key.type}}'
 {% endcall %}
-{% if user.password_hash is defined %}
-set system login user {{user.username}} authentication encrypted-password '{{user.password_hash}}'
+{% if user.password is defined %}
+set system login user {{user.username}} authentication encrypted-password '{{user.password}}'
 {% endif %}
 {% endfor %}
 {% else %}
@@ -149,9 +160,10 @@ set system login user vyos authentication encrypted-password '$6$rounds=656000$V
 set system name-server '{{server}}'
 {% endfor %}
 {% else %}
+set system name-server '127.0.0.1'
 set system name-server '8.8.8.8'
 {% endif %}
-{% if disable_update_check %}
+{% if not (disable_update_check | default(false)) %}
 set system update-check auto-check
 set system update-check url 'https://raw.githubusercontent.com/vyos/vyos-rolling-nightly-builds/main/version.json'
 {% endif %}
@@ -206,21 +218,21 @@ set container name kea-dhcp4 volume sockets propagation 'shared'
 set container name kea-dhcp4 volume sockets source '/opt/vyatta/etc/config/containers/kea-sockets/'
 
 set container name pdns-auth allow-host-networks
-set container name pdns-auth image 'gitea.fabiv.pw/fborries/powerdns/pdns-auth-48:latest'
+set container name pdns-auth image 'gitea.fabiv.pw/fborries/powerdns/pdns-auth-{{macros.PDNS_AUTH_VER}}:latest'
 set container name pdns-auth volume config destination '/etc/powerdns/'
 set container name pdns-auth volume config mode 'ro'
 set container name pdns-auth volume config source '/opt/vyatta/etc/config/containers/pdns-auth/'
 
 set container name pdns-recursor allow-host-networks
 set container name pdns-recursor cap-add 'net-bind-service'
-set container name pdns-recursor image 'gitea.fabiv.pw/fborries/powerdns/pdns-recursor-50:latest'
+set container name pdns-recursor image 'gitea.fabiv.pw/fborries/powerdns/pdns-recursor-{{macros.PDNS_RECURSOR_VER}}:latest'
 set container name pdns-recursor volume config destination '/etc/powerdns/'
 set container name pdns-recursor volume config mode 'ro'
 set container name pdns-recursor volume config source '/opt/vyatta/etc/config/containers/pdns-recursor/'
 
 set container name postgres allow-host-networks
 set container name postgres environment POSTGRES_PASSWORD value '{{databases.admin_db_password}}'
-set container name postgres image 'gitea.fabiv.pw/fborries/postgres:16-alpine'
+set container name postgres image 'gitea.fabiv.pw/fborries/postgres:{{databases.version if databases is defined and databases.version is defined else macros.POSTGRES_VER}}-alpine'
 set container name postgres memory '0'
 set container name postgres volume config destination '/docker-entrypoint-initdb.d'
 set container name postgres volume config mode 'ro'

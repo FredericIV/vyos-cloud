@@ -8,7 +8,13 @@ write_files:
       #!/bin/vbash
       rm /opt/vyatta/etc/config/containers/{postgres/data,kea-sockets}/touch
       source /opt/vyatta/etc/functions/script-template
-{%- for image in ['gitea.fabiv.pw/fborries/postgres:16-alpine','gitea.fabiv.pw/fborries/jonasal/kea-dhcp4-ha:2-alpine','gitea.fabiv.pw/fborries/jonasal/kea-dhcp-ddns:2-alpine','gitea.fabiv.pw/fborries/jonasal/kea-ctrl-agent:2-alpine','gitea.fabiv.pw/fborries/powerdns/pdns-auth-48:latest','gitea.fabiv.pw/fborries/powerdns/pdns-recursor-50:latest'] %}
+{%- for image in [
+  'docker.io/postgres:'~(databases.version if databases is defined and databases.version is defined else macros.POSTGRES_VER)~'-alpine',
+  'docker.io/jonasal/kea-dhcp4-ha:2-alpine',
+  'docker.io/jonasal/kea-dhcp-ddns:2-alpine',
+  'docker.io/jonasal/kea-ctrl-agent:2-alpine',
+  'docker.io/powerdns/pdns-auth-'~macros.PDNS_AUTH_VER~':latest',
+  'docker.io/powerdns/pdns-recursor-'~macros.PDNS_RECURSOR_VER~':latest'] %}
       run add container image '{{image}}'
 {%- endfor %}{% for container in ["postgres","pdns-auth","pdns-recursor","kea-dhcp4", "kea-dhcp-ddns", "kea-ctrl-agent"] %}
       run restart container {{container}}
