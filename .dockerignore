@@ -1,5 +1,4 @@
 .concourse.yaml
-example*
 .gitignore
 README.md
 Containerfile
