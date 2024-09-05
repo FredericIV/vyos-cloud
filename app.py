@@ -14,6 +14,8 @@ import io
 from typing import Callable
 from sys import stderr
 
+conf_dir=os.path.abspath("configs")
+template_dir=os.path.abspath("templates")
 
 def filter_hostaddress(value, purpose=None):
     address = ipaddress.ip_interface(value)
@@ -99,10 +101,10 @@ def interface_flatten(conf: dict) -> dict:
 
 def load_conf(name: str) -> dict:
     if name[-5:] == ".json":
-        with open(name) as file:
+        with open(os.path.join(conf_dir, name)) as file:
             env = json.load(file)
     else:
-        with open(name if name[-5:] == ".yaml" else name + ".yaml") as file:
+        with open(os.path.join(conf_dir, name if name[-5:] == ".yaml" else name + ".yaml")) as file:
             env = yaml.safe_load(file)
     return env
 
@@ -187,7 +189,7 @@ def ret_archive(render:Callable[[os.PathLike],str], api:str, type:str) -> io.Byt
 
 def client(args:argparse.Namespace) -> None:
     env = jinja2.Environment(
-        loader=jinja2.FileSystemLoader("templates"),
+        loader=jinja2.FileSystemLoader(template_dir),
         autoescape=jinja2.select_autoescape(),
     )
     env.filters["hostaddress"] = filter_hostaddress
@@ -215,6 +217,7 @@ def server(env:argparse.Namespace) -> None:
     app.logger
     app.add_template_filter(filter_hostaddress, "hostaddress")
     app.add_template_filter(filter_netaddress, "netaddress")
+    app.template_folder = template_dir
     page_template = """<!doctype html>
     <html style=\"height: 100%;\">
         <head>
