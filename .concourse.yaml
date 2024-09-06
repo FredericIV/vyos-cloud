@@ -58,5 +58,6 @@ jobs:
       outputs: [{"name":"build-vyos-cloud"}]
   - put: container.vyos-cloud
     inputs: detect
+    no_get: true
     params:
       image: build-vyos-cloud/image.tar
