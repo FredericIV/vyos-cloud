@@ -17,6 +17,7 @@ resources:
     repository: docker.io/library/python
 - name: repo
   type: git
+  icon: git
   source:
     uri: https://gitea.fabiv.pw/fborries/vyos-cloud.git
     username: ((fborries-gitea.username))
