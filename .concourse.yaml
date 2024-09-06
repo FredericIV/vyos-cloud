@@ -4,6 +4,7 @@ resources:
   icon: docker
   check_every: never
   source:
+    tag: latest
     repository: gitea.fabiv.pw/fborries/vyos-cloud
     username: ((fborries-gitea.username))
     password: ((fborries-gitea.password))
