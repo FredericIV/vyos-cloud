@@ -25,7 +25,8 @@ jobs:
   plan:
   - get: container.python
     trigger: true
-    skip_download: true
+    params:
+      skip_download: true
   - get: repo
     trigger: true
   - task: build-vyos-cloud
