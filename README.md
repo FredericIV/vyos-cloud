@@ -1,4 +1,5 @@
 # Vyos-Cloud
+![CI](https://concourse.k8s.fabiv.pw/api/v1/teams/main/pipelines/fborries.vyos-cloud/badge)
 ## Description
 Provide [Cloud-Init](https://cloudinit.readthedocs.io/en/latest/) [NoCloud](https://cloudinit.readthedocs.io/en/latest/reference/datasources/nocloud.html) user-data, meta-data, and vendor-data endpoints with configurable content in support of ephemeral [Vyos](https://vyos.io/) routing nodes.
 
